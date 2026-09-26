@@ -11,8 +11,6 @@ WIT offers a way to release the handle again.
 
 from dataclasses import dataclass
 
-from .protocol import PROTOCOL_VERSION
-
 
 @dataclass(frozen=True)
 class ResolveContext:
@@ -22,7 +20,6 @@ class ResolveContext:
     viewer: object = None
     argument: str = None
     version: str = ""
-    expansions: int = 0
 
 
 @dataclass(frozen=True)
@@ -102,8 +99,6 @@ BUILTINS = (
             lambda c: _number(_player(c, "get_yaw") or 0.0, 1)),
     Builtin("player_pitch", "Pitch of the player",
             lambda c: _number(_player(c, "get_pitch") or 0.0, 1)),
-    Builtin("player_locale", "Locale of the player's client",
-            lambda c: _string(c, "get_locale")),
     Builtin("player_ip", "IP address of the player",
             lambda c: _string(c, "get_ip")),
     Builtin("player_has_permission", "Whether the player holds a permission node",
@@ -117,10 +112,6 @@ BUILTINS = (
     Builtin("server_mspt", "Milliseconds per tick the server averages",
             lambda c: _number(c.server.get_mspt())),
     Builtin("papi_version", "Version of PumpkinPAPI", lambda c: c.version),
-    Builtin("papi_protocol", "Protocol version PumpkinPAPI speaks",
-            lambda c: str(PROTOCOL_VERSION)),
-    Builtin("papi_expansions", "Expansions registered with PumpkinPAPI",
-            lambda c: str(c.expansions)),
 )
 
 BUILTIN_BY_ID = {builtin.id: builtin for builtin in BUILTINS}

@@ -43,7 +43,7 @@ Consumer plugin                    PumpkinPAPI                    Expansion plug
       |                                  |  on_request("ranks", "prefix") |
       |                                  |------------------------------->|
       |                                  |<--------------- "Admin"        |
-      |<------------ "42 ms Admin"      |                                |
+      |<------------ "42 ms Admin"       |                                |
 ```
 
 This is the same shape Java PlaceholderAPI uses:
@@ -83,7 +83,7 @@ Copy `pumpkin-papi.wasm` into your Pumpkin server's `plugins/` folder and start 
 should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 21 built in placeholders
+[INFO] PumpkinPAPI 0.1.0 ready with 18 built in placeholders
 ```
 
 Then, in game (operator only):
@@ -110,7 +110,6 @@ failing, so the same text works in a global context and in a per player context.
 | `%player_z%` | `-8.5` | |
 | `%player_yaw%` | `90` | |
 | `%player_pitch%` | `-12` | |
-| `%player_locale%` | `en_us` | The player's client locale |
 | `%player_ip%` | `127.0.0.1` | |
 | `%player_has_permission:NODE%` | `true` | Takes an argument, see below |
 | `%server_online%` | `5` | |
@@ -118,13 +117,33 @@ failing, so the same text works in a global context and in a per player context.
 | `%server_tps%` | `19.98` | |
 | `%server_mspt%` | `4.27` | |
 | `%papi_version%` | `0.1.0` | |
-| `%papi_protocol%` | `0` | |
-| `%papi_expansions%` | `3` | Expansions registered right now |
 
-The list is deliberately short. A placeholder belongs here only when it is vanilla state a
-third party has no better source for, which is why there is no `%player_world%`, no
-`%time%` family and no `%random_%`. Everything interesting is supposed to arrive as an
-expansion.
+The list is deliberately short, and it is the part of this project most likely to upset
+someone. A placeholder earns a place here only when it is **vanilla state a third party has no
+better source for**. Everything else is supposed to arrive as an expansion, which is the whole
+point of the project.
+
+That rule is why these are missing, and asking for them is not a bug report:
+
+- **Ranks, groups, prefixes, economy, balance** — a permission manager or economy plugin owns
+  these. They register an expansion.
+- **Op level** — superseded by a permission manager. `%player_has_permission:NODE%` is the
+  primitive.
+- **The scoreboard team, food, saturation and experience** — survival state nobody puts in a
+  tab list.
+- **Client locale, MOTD, difficulty, online percentage, hardcore, online mode, whitelist** —
+  server trivia, and the last few change once a restart rather than per player.
+- **`%papi_protocol%` and `%papi_expansions%`** — both were already available through `ping`
+  and `get_registered_placeholders`, so the placeholders were redundant.
+
+Two things that are missing for a technical reason rather than a design one:
+
+- **`%player_world%` and `%player_display_name%`** are the two most requested. Their getters
+  hand back a host resource with no way to release it, so they need a change to
+  [the WIT](https://github.com/Pumpkin-MC/Pumpkin/tree/master/crates/pumpkin-plugin-wit), not to
+  this plugin.
+- **World and time placeholders** (`%world_time%`, `%time%`, `%random_%`) need world and time
+  getters this API does not expose cheaply.
 
 ### Arguments
 
@@ -320,7 +339,7 @@ than an exception.
 ```json
 -> {"op": "ping"}
 <- {"ok": true, "protocol": 0, "name": "PumpkinPAPI", "version": "0.1.0",
-    "placeholders": 21, "expansions": 2}
+    "placeholders": 18, "expansions": 2}
 ```
 
 ### `get_registered_placeholders`

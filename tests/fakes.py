@@ -131,7 +131,6 @@ def context(server=None, viewer=None, **kwargs):
         "server": server or FakeServer(),
         "viewer": viewer,
         "version": "0.1.0",
-        "expansions": 0,
     }
     fields.update(kwargs)
     return ResolveContext(**fields)

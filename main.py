@@ -206,7 +206,6 @@ class PumpkinPapiPlugin(Plugin):
             viewer=self._viewer(viewer),
             argument=argument,
             version=VERSION,
-            expansions=len(self._registry),
         )
 
         def resolve_one(identifier, token_argument):
@@ -376,7 +375,6 @@ class PumpkinPapiPlugin(Plugin):
             server=self._server,
             viewer=self._viewer(viewer),
             version=VERSION,
-            expansions=len(self._registry),
         )
         value = self._resolve_one(base, identifier, argument, [MAX_CALLBACKS_PER_RESOLVE])
         if value is None:

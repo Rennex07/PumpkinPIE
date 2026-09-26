@@ -27,7 +27,6 @@ class BuiltinTest(unittest.TestCase):
         self.assertEqual(BUILTIN_BY_ID["player_gamemode"].resolve(ctx), "creative")
         self.assertEqual(BUILTIN_BY_ID["player_uuid"].resolve(ctx), FakePlayer().get_id())
         self.assertEqual(BUILTIN_BY_ID["player_ip"].resolve(ctx), "127.0.0.1")
-        self.assertEqual(BUILTIN_BY_ID["player_locale"].resolve(ctx), "en_us")
 
     def test_player_numbers_are_trimmed(self):
         ctx = context(viewer=FakePlayer())
@@ -61,11 +60,8 @@ class BuiltinTest(unittest.TestCase):
             BUILTIN_BY_ID["player_has_permission"].resolve(without_argument), ""
         )
 
-    def test_papi_placeholders_report_the_provider_itself(self):
-        ctx = context(expansions=2)
-        self.assertEqual(BUILTIN_BY_ID["papi_version"].resolve(ctx), "0.1.0")
-        self.assertEqual(BUILTIN_BY_ID["papi_protocol"].resolve(ctx), "0")
-        self.assertEqual(BUILTIN_BY_ID["papi_expansions"].resolve(ctx), "2")
+    def test_the_version_placeholder_reports_the_provider(self):
+        self.assertEqual(BUILTIN_BY_ID["papi_version"].resolve(context()), "0.1.0")
 
 
 if __name__ == "__main__":
