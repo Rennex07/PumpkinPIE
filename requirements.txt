@@ -1,0 +1,3 @@
+# The SDK bundles the WIT the plugin is compiled against, so the version matters.
+# A newer pumpkin-api-py may ship a newer WIT than the server you run.
+pumpkin-api-py==0.1.0

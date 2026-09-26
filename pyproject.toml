@@ -1,0 +1,23 @@
+[project]
+name = "pumpkin-papi"
+version = "0.1.0"
+description = "A PlaceholderAPI style placeholder provider for Pumpkin, in Python"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-only" }
+authors = [{ name = "Rennex" }]
+keywords = ["pumpkin", "minecraft", "plugin", "placeholder", "wasm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+
+# Kept in step with requirements.txt: the SDK carries the WIT the plugin is
+# compiled against.
+dependencies = ["pumpkin-api-py==0.1.0"]
+
+[project.urls]
+Repository = "https://github.com/Rennex07/PumpkinPAPI"
+
+[tool.setuptools]
+packages = ["papi"]
