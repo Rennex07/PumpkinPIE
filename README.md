@@ -83,7 +83,7 @@ Copy `pumpkin-papi.wasm` into your Pumpkin server's `plugins/` folder and start 
 should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 33 built in placeholders
+[INFO] PumpkinPAPI 0.1.0 ready with 21 built in placeholders
 ```
 
 Then, in game (operator only):
@@ -104,12 +104,7 @@ failing, so the same text works in a global context and in a per player context.
 | `%player_ping%` | `42` | Milliseconds |
 | `%player_health%` | `6.5` | |
 | `%player_max_health%` | `20` | |
-| `%player_food%` | `18` | 0 to 20 |
-| `%player_saturation%` | `4.2` | |
-| `%player_experience_level%` | `7` | |
-| `%player_experience_progress%` | `25` | Percent to the next level |
 | `%player_gamemode%` | `creative` | |
-| `%player_permission_level%` | `two` | |
 | `%player_x%` | `1.23` | |
 | `%player_y%` | `64` | |
 | `%player_z%` | `-8.5` | |
@@ -117,21 +112,19 @@ failing, so the same text works in a global context and in a per player context.
 | `%player_pitch%` | `-12` | |
 | `%player_locale%` | `en_us` | The player's client locale |
 | `%player_ip%` | `127.0.0.1` | |
-| `%player_team%` | `red` | Scoreboard team |
 | `%player_has_permission:NODE%` | `true` | Takes an argument, see below |
 | `%server_online%` | `5` | |
 | `%server_max_players%` | `20` | |
-| `%server_online_percent%` | `25` | |
-| `%server_motd%` | `A Pumpkin server` | |
-| `%server_difficulty%` | `normal` | |
 | `%server_tps%` | `19.98` | |
 | `%server_mspt%` | `4.27` | |
-| `%server_online_mode%` | `true` | |
-| `%server_hardcore%` | `false` | |
-| `%server_whitelist%` | `true` | |
 | `%papi_version%` | `0.1.0` | |
 | `%papi_protocol%` | `0` | |
 | `%papi_expansions%` | `3` | Expansions registered right now |
+
+The list is deliberately short. A placeholder belongs here only when it is vanilla state a
+third party has no better source for, which is why there is no `%player_world%`, no
+`%time%` family and no `%random_%`. Everything interesting is supposed to arrive as an
+expansion.
 
 ### Arguments
 
@@ -327,7 +320,7 @@ than an exception.
 ```json
 -> {"op": "ping"}
 <- {"ok": true, "protocol": 0, "name": "PumpkinPAPI", "version": "0.1.0",
-    "placeholders": 33, "expansions": 2}
+    "placeholders": 21, "expansions": 2}
 ```
 
 ### `get_registered_placeholders`
