@@ -23,7 +23,6 @@ plugins add their own placeholders by registering an expansion.
 - [Known rough edges](#known-rough-edges-in-pumpkin-and-the-plugin-api)
 - [Development](#development)
 - [Contributing](#contributing)
-- [Thanks](#thanks)
 
 ## Status
 
@@ -676,11 +675,6 @@ Some things that would help:
 
 If you send a pull request, please say which Pumpkin version you built against and whether you
 tested it in game. Bug reports are most useful with the log line the provider printed.
-
-## Thanks
-
-If you use this, or write an expansion for it, or just tell someone about it, that is worth more
-than a star. PRs are welcome and so is a note saying which placeholder you had to work around.
 
 ## License
 
