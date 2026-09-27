@@ -1,7 +1,8 @@
 # PumpkinPIE
 
 **P**laceholder **I**ntegration **E**ngine for [Pumpkin](https://github.com/Pumpkin-MC/Pumpkin),
-modelled on [PlaceholderAPI](https://github.com/PlaceholderAPI/PlaceholderAPI).
+modelled on [PlaceholderAPI](https://github.com/PlaceholderAPI/PlaceholderAPI). No code is copied
+from it, and the protocol here is its own thing rather than a port.
 
 It answers `%player_name%`, `%player_ping%`, `%server_online%` and friends, and lets other
 plugins add their own placeholders by registering an expansion.
@@ -19,9 +20,10 @@ plugins add their own placeholders by registering an expansion.
 - [Using it from a plugin](#using-it-from-a-plugin)
 - [Protocol](#protocol)
 - [Differences from Java PlaceholderAPI](#differences-from-java-placeholderapi)
-- [Known rough edges](#known-rough-edges)
+- [Known rough edges](#known-rough-edges-in-pumpkin-and-the-plugin-api)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Thanks](#thanks)
 
 ## Status
 
@@ -675,13 +677,26 @@ Some things that would help:
 If you send a pull request, please say which Pumpkin version you built against and whether you
 tested it in game. Bug reports are most useful with the log line the provider printed.
 
-## Credits
+## Thanks
 
-- [PlaceholderAPI](https://github.com/PlaceholderAPI/PlaceholderAPI), for the model this follows.
-  Nothing is copied from it.
-- [RookTAB](https://github.com/xRookieFight/RookTAB), the existing Pumpkin tab list plugin, as a
-  reminder that placeholders are worth having.
-- Epix Development, for the work that came before under that name.
+This started because [RookTAB](https://github.com/xRookieFight/RookTAB) wanted `%player_ping%`
+and there was nowhere to ask for it. Every design decision here traces back to a plugin that
+needed one specific placeholder and could not reach the server.
+
+It was also built by someone who cannot play Minecraft, which turns out to be a useful
+constraint. Everything in [Status](#status) was verified by starting a server and typing commands
+at it, and two of the bugs that mattered most were invisible to the compiler and to the tests. A
+permission node that was never registered looked exactly like a command that did not exist. An
+expansion unregistering on unload looked exactly like a clean shutdown, right up until the store
+driver reported a trap. Neither would ever have been found by reading the code carefully; both
+were found by running the thing and reading the log.
+
+If you use this, or write an expansion for it, or just tell someone about it, that is worth more
+than a star. PRs are welcome and so is a note saying which placeholder you had to work around.
+
+Earlier work on this lived under [Epix Development](https://github.com/Epix-Development) and
+arrived here renamed. If you can see where the name came from, you have been reading it the way I
+wrote it.
 
 ## License
 
