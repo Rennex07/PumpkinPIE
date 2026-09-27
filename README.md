@@ -10,9 +10,30 @@ plugins add their own placeholders by registering an expansion.
 %player_ping%ms  %player_name%  %server_online%/%server_max_players%
 ```
 
+- [Status](#status)
+- [Why](#why)
+- [How it works](#how-it-works)
+- [Install](#install)
+- [Built in placeholders](#built-in-placeholders)
+- [Commands](#commands)
+- [Using it from a plugin](#using-it-from-a-plugin)
+- [Protocol](#protocol)
+- [Differences from Java PlaceholderAPI](#differences-from-java-placeholderapi)
+- [Known rough edges](#known-rough-edges)
+- [Development](#development)
+- [Contributing](#contributing)
+
 ## Status
 
 Early. Protocol version `0`, so the shape may still change.
+
+Verified in game on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**: the
+component loads, `/papi` registers, built ins resolve against a live player, and unknown
+placeholders stay literal. No other version has been tried, and there is no CI.
+
+Not yet exercised by anything: registering an expansion, answering an `on_request`, the cache
+TTL, and `set_placeholders_batch`. Those are covered by unit tests at the protocol level, but no
+second plugin has used them yet.
 
 ## Why
 
@@ -48,13 +69,13 @@ This is the shape Java PlaceholderAPI uses:
 | Java PlaceholderAPI                   | PumpkinPAPI                                   |
 |:--------------------------------------|:----------------------------------------------|
 | `PlaceholderAPI.setPlaceholders(p, t)` | `set_placeholders`                            |
-| `getPlaceholderValue(p, text)`        | `get_placeholder_value`                       |
+| `getPlaceholderValue(p, text)`        | `get_placeholder_value` (takes an **id**, not text) |
 | `getRegisteredPlaceholders()`         | `get_registered_placeholders`                 |
-| `registerPlaceholderExpansion(exp)`   | `register_expansion`                          |
+| `registerPlaceholderExpansion(exp)`   | `register_expansion` (also takes a cache setting) |
 | `unregisterPlaceholderExpansion(exp)` | `unregister_expansion`                        |
 | `PlaceholderExpansion.getIdentifier()` | the `namespace` you register                  |
 | `onRequest(player, identifier)`       | `on_request` (the provider sends this to you) |
-| the built in `internal` expansion     | the `player` and `server` namespaces          |
+| the built in `internal` expansion     | the `player`, `server` and `papi` namespaces  |
 | `setPlaceholders` for many players    | `set_placeholders_batch`                      |
 | `Cacheable` and a TTL in `config.yml` | `Cache::Ttl` on registration                  |
 
@@ -62,8 +83,8 @@ Rules worth knowing up front:
 
 - **A placeholder is `%namespace_name%`.** The namespace is everything before the first
   underscore, so `%luckperms_prefix%` belongs to whoever registered `luckperms`.
-- **`player` and `server` are reserved.** The provider answers them, and an expansion cannot
-  claim them.
+- **`player`, `server` and `papi` are reserved.** The provider answers them, and an expansion
+  cannot claim them.
 - **Ids are case insensitive.** `%Player_Ping%` and `%player_ping%` are the same placeholder.
 - **A placeholder nobody can resolve is left in the text as written.** Not an error, not an
   empty string.
@@ -74,13 +95,38 @@ Rules worth knowing up front:
 
 ## Install
 
+**Requires a local Pumpkin checkout, for now.** The published `pumpkin-plugin-api` crate is
+behind the server's WIT, and a component built against it fails to load with
+`type-checking export func \`handle-event\``. Until a release catches up, this repository pins the
+crate to a path, so you need the sources next to it. There is no prebuilt component to download
+either, because there are no releases.
+
 ```bash
-cargo install cargo-component
+# 1. The plugin API the component is built against.
+git clone https://github.com/Pumpkin-MC/Pumpkin.git
+
+# 2. This plugin, as a sibling of that checkout.
+git clone https://github.com/Rennex07/PumpkinPAPI.git
 ```
 
-Build the component and drop it in the server's `plugins` directory:
+So the two directories end up side by side, which is what the `../Pumpkin` in `Cargo.toml`
+expects:
+
+```
+somewhere/
+├── Pumpkin/          <- the server sources
+└── PumpkinPAPI/      <- this
+```
+
+If you keep them elsewhere, edit the `[patch.crates-io]` path in `Cargo.toml`. It points at
+`../Pumpkin/crates/pumpkin-plugin-api` and must be present in **your** `Cargo.toml` too if you
+are consuming the crate; a patch in this workspace does not apply to yours.
+
+Then:
 
 ```bash
+rustup target add wasm32-wasip2
+cargo install cargo-component
 cargo component build --release --target wasm32-wasip2
 ```
 
@@ -88,10 +134,10 @@ Copy `target/wasm32-wasip2/release/pumpkin_papi.wasm` into your Pumpkin server's
 folder and start the server. You should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 11 built in placeholders
+[INFO] PumpkinPAPI <version> ready with 11 built in placeholders
 ```
 
-Then, in game, as an operator:
+Then, in game, as an operator of level 2 or above:
 
 ```
 /papi parse %player_name% has %player_ping% ms
@@ -99,8 +145,13 @@ Then, in game, as an operator:
 
 ## Built in placeholders
 
-Player placeholders need a viewer. Without one they resolve to an empty string rather than
-failing, so the same text works globally and per player.
+Player placeholders need a viewer. Without one they are **left in the text as written** and
+listed in `unresolved`, exactly like an unknown placeholder. So `%player_name%` in text resolved
+without a viewer comes back as the literal `%player_name%`, not as an empty string. If you need
+one line to work both globally and per player, resolve it per player.
+
+`%player_has_permission%` needs its argument the same way, and is likewise left in the text if
+it does not get one.
 
 | Placeholder | Example | Notes |
 |:--|:--|:--|
@@ -112,7 +163,7 @@ failing, so the same text works globally and per player.
 | `%player_team%` | `red` | Scoreboard team |
 | `%player_health%` | `6.5` | |
 | `%player_max_health%` | `20` | |
-| `%player_has_permission:NODE%` | `true` | Takes an argument, see below |
+| `%player_has_permission%` | `true` | Takes an argument, see [below](#arguments) |
 | `%server_online%` | `5` | |
 | `%server_max_players%` | `20` | |
 
@@ -148,12 +199,19 @@ A placeholder can take one argument, written after a colon:
 %player_has_permission:PumpkinPAPI:use%
 ```
 
-An argument may contain letters, digits and `_ . - : /`. A placeholder that needs an argument
-and does not get one resolves to an empty string.
+An argument may contain letters, digits and `_ . - : /`. The argument is **only reachable through
+`set_placeholders`**, by writing it in the text: `get_placeholder_value` takes an id and no
+argument, so asking it for `player_has_permission` always reports `known: false`.
 
 ## Commands
 
-All commands need the `PumpkinPAPI:use` permission, which operators have by default.
+All commands need the `PumpkinPAPI:use` permission, which is granted to **op level 2 and above**
+by default. The node is registered when the plugin loads rather than declared in its metadata,
+so it does not show up in a permissions listing.
+
+The node has to be namespaced with the plugin's exact name. `PumpkinPAPI:use`, case-sensitive —
+`pumpkin-papi:use` is refused, and a node that was never registered denies the command to
+*everyone*, operators included.
 
 | Command | What it does |
 |:--|:--|
@@ -161,64 +219,162 @@ All commands need the `PumpkinPAPI:use` permission, which operators have by defa
 | `/papi` | Prints the usage line and every placeholder |
 | `/papi expansions` | Lists registered expansions and who owns them |
 
-`/papi parse` reports which placeholders it could not resolve, so it doubles as a way to check a
-config. Tab completion suggests placeholder ids.
+`/papi parse` reports what it could not resolve as a **red error line** and returns a non-zero
+result, so it doubles as a way to check a config. Tab completion offers `%id%` values, up to 20
+at a time.
 
 ## Using it from a plugin
 
-Add the crate. It is both the client and the provider, so one dependency covers both.
+The crate is not on crates.io yet, so depend on it from git, and **add the same
+`[patch.crates-io]` to your own `Cargo.toml`** — a patch in this repository's workspace has no
+effect on yours:
 
 ```toml
 [dependencies]
-pumpkin-plugin-api = "0.1.0-dev"
-pumpkin-papi = "0.1"
+pumpkin-papi = { git = "https://github.com/Rennex07/PumpkinPAPI" }
+
+[patch.crates-io]
+pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 ```
 
-Consuming placeholders:
+That path is the `../Pumpkin` checkout described in [Install](#install); adjust it to wherever
+yours lives. It is required until `pumpkin-plugin-api` is published at a version matching the
+server's WIT.
+
+### Consuming placeholders
 
 ```rust
-use pumpkin_papi::PapiClient;
+use pumpkin_papi::{PapiClient, PapiError};
 
-let papi = PapiClient::new();
+fn render() -> Result<(), PapiError> {
+    let papi = PapiClient::new();
 
-let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
-println!("{}   unresolved: {:?}", line.text, line.unresolved);
+    let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
+    println!("{}   unresolved: {:?}", line.text, line.unresolved);
 
-let online = papi.get_placeholder_value(None, "server_online")?;   // Option<String>
-let all    = papi.get_registered_placeholders()?;
+    let online = papi.get_placeholder_value(None, "server_online")?;   // Option<String>
+    let all = papi.get_registered_placeholders()?;
+    Ok(())
+}
 ```
 
-Refreshing a tab list or a scoreboard for every player, which is the case batching exists for:
+Every call returns `Result<_, PapiError>`. `PapiError::Unreachable` is the one to expect on a
+first run: it means the provider plugin is not installed, is named differently, or your plugin
+messaged itself. Pumpkin reports all three the same way, so check the server log first.
+
+Refreshing a tab list or a scoreboard for every player, which is what batching exists for:
 
 ```rust
 let lines = [("Steve", "%player_ping%ms"), ("Alex", "%player_ping%ms")];
 let results = papi.set_placeholders_batch(&lines)?;   // one message, not one per player
 ```
 
-Providing placeholders, which is the `PlaceholderExpansion` equivalent:
+Every batch line carries a viewer. The protocol allows a line with no viewer, but there is no
+Rust API for it yet, so a batch is always per player.
+
+### Providing placeholders
+
+This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin`, a
+`PluginMetadata`, and `register_plugin!`.
 
 ```rust
-use pumpkin_papi::{answer, Cache, IpcMessage, PapiClient, PluginId};
+use pumpkin_plugin_api::{Context, IpcMessage, Plugin, PluginId, PluginMetadata, Result};
+use pumpkin_papi::{answer, Cache, PapiClient, PapiError};
 
-fn on_load() {
+pub struct Ranks;
+
+impl Plugin for Ranks {
+    fn new() -> Self {
+        Self
+    }
+
+    fn metadata(&self) -> PluginMetadata {
+        PluginMetadata {
+            name: "Ranks".to_string(),
+            version: "0.1.0".to_string(),
+            authors: vec!["you".to_string()],
+            description: "Ranks as placeholders.".to_string(),
+            dependencies: vec!["PumpkinPAPI".to_string()],
+            permissions: vec![],
+        }
+    }
+
+    fn on_load(&self, _context: Context) -> Result<()> {
+        self.register()?;
+        Ok(())
+    }
+
+    fn handle_ipc_message(
+        &self,
+        _from: PluginId,
+        message: IpcMessage,
+    ) -> std::result::Result<IpcMessage, String> {
+        answer(&message, |ctx| match ctx.name {
+            "prefix" => rank_of(ctx.viewer),
+            _ => None,
+        })
+        .map_err(|error| error.to_string())
+    }
+}
+
+impl Ranks {
     // `Cache::Ttl` lets the provider reuse your values instead of asking every
     // time. The provider clamps it, so a long TTL cannot serve stale ranks.
-    PapiClient::new().register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
+    fn register(&self) -> Result<(), PapiError> {
+        PapiClient::new().register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
+        Ok(())
+    }
 }
 
-fn handle_ipc_message(_from: PluginId, message: IpcMessage) -> Result<IpcMessage, String> {
-    Ok(answer(&message, |ctx| match ctx.name {
-        "prefix" => Some(rank_of(ctx.viewer)),
-        _ => None,
-    }))
+fn rank_of(viewer: Option<&str>) -> Option<String> {
+    let viewer = viewer?;
+    Some(RANKS.get(viewer).copied().unwrap_or("Member").to_string())
 }
+
+register_plugin!(Ranks);
 ```
 
-`ctx` carries `namespace`, `id`, `name`, `viewer` and `argument`. Return `None` to decline, and
-the placeholder stays in the text. No JSON, no message routing, no parsing.
+Three things about that signature are easy to get wrong:
 
-List `dependencies = ["PumpkinPAPI"]` in your plugin metadata so you are only loaded once the
-provider is ready to answer.
+- `handle_ipc_message` returns `std::result::Result`, not `Result`. `pumpkin_plugin_api` exports
+  its own `Result` alias, so with it in scope the prelude's `Result` is shadowed and the trait
+  signature needs the fully qualified name.
+- `answer` returns `Result<Vec<u8>, ProtocolError>`, so the `map_err` is what turns it into the
+  `String`-errored result the trait wants.
+- `register_plugin!` is a macro from `pumpkin_plugin_api`, not from this crate.
+
+`ctx` is borrowed data only, and `viewer` is a player **name**, not a handle:
+
+| Field | Type | |
+|:--|:--|:--|
+| `namespace` | `&str` | lowercased |
+| `id` | `&str` | the full id as written in the text, so its case is preserved |
+| `name` | `&str` | the part after the first `_` |
+| `viewer` | `Option<&str>` | player name, not a `Player` |
+| `argument` | `Option<&str>` | the text after the first `:` |
+
+There is no `Server` or `Player` reachable from inside the closure, so capture whatever else you
+need when you build it. Return `None` to decline, and the placeholder stays in the text.
+
+List `dependencies = ["PumpkinPAPI"]` in your metadata so you are only loaded once the provider
+is ready to answer.
+
+### Limits
+
+Each of these fails loudly in the protocol rather than truncating:
+
+| Limit | Value | Exceeding it |
+|:--|--:|:--|
+| Message size | 1 MiB either way | `too large` |
+| One line of text | 32 KiB | that request is refused |
+| Namespace, name, viewer, argument | 128 characters | that request is refused |
+| Lines per `set_placeholders_batch` | 8192 | the whole batch is refused |
+| Expansion callbacks per line | 16 | the rest are left in the text, with a warning in the log |
+| Cache TTL an expansion may ask for | 60 s | clamped to 60 s |
+
+The callback budget is per line rather than per message, so a large batch is not penalised for
+being large. It is counted per *occurrence*, but a placeholder repeated within one line is only
+resolved once, so a line that repeats a value still costs one round trip.
 
 ### Caching
 
@@ -231,8 +387,11 @@ data indefinitely.
 ### Other languages
 
 The provider does not care what language you write in. The protocol is a set of JSON objects over
-Pumpkin's [inter-plugin IPC][ipc], which is part of the public WIT, so every SDK has a binding for
-it. What that costs you today:
+Pumpkin's [inter-plugin IPC][ipc], which is part of the public WIT, so every SDK Pumpkin generates
+*can* reach it. Whether a given SDK exposes it conveniently is another matter, and the
+`pumpkin-plugin-api` crate keeps its generated `wit` module private, so even in Rust the message
+types are re-declared as `PluginId = String` and `IpcMessage = Vec<u8>`. Expect to hand-roll the
+export in another language. What that costs you today:
 
 - **There is no client crate but this one.** In another language, a call is a few lines: build the
   JSON, send it, read the reply. A TypeScript or Kotlin client module is the most useful
@@ -255,8 +414,11 @@ against an older revision keeps working.
 ```json
 -> {"op":"ping"}
 <- {"ok":true,"protocol":0,"name":"PumpkinPAPI","version":"0.1.0",
-    "placeholders":17,"expansions":2}
+    "placeholders":11,"expansions":2}
 ```
+
+`placeholders` here counts the **built ins only**. `get_registered_placeholders` returns built
+ins *plus* every name an expansion declared, so the two numbers will not match.
 
 ### `get_registered_placeholders`
 
@@ -301,9 +463,14 @@ wants, because it is one message instead of one per player.
 
 ### `register_expansion`
 
-`placeholders` may be omitted or empty, which means the expansion answers whatever it is asked
-for. A later call replaces the name list and the cache setting. The response echoes back the TTL
-the provider actually applied, after clamping.
+`placeholders` is what the provider advertises for your namespace in `get_registered_placeholders`
+and `/papi`. It is **not** a filter: the provider forwards any `%ranks_*%` to you whether you
+listed it or not, which is why the `_ => None` arm in the example above matters. Omit the list,
+or leave it empty, if you would rather answer whatever you are asked.
+
+A later call replaces the name list and the cache setting. Names are lowercased on
+registration, so `register_expansion("Ranks", &["Prefix"])` works. The response echoes back the
+TTL the provider actually applied, after clamping.
 
 ```json
 -> {"op":"register_expansion","namespace":"ranks","placeholders":["prefix"],
@@ -347,19 +514,20 @@ Worth reading before porting a config over:
 - **No offline player support.** The viewer has to be online.
 - **`get_placeholder_value` takes an id, not a text.** There is no `%placeholder%` string to parse.
 
-## Known rough edges
+## Known rough edges in Pumpkin and the plugin API
 
-Two things in the plugin API fail quietly, and both cost real time:
+Two things outside this plugin fail quietly, and both cost real time while building it:
 
-- **A permission node that does not start with the plugin's exact name is refused,** and
-  `Context::register_permission` returns that as an `Err` you can ignore by accident. An
-  unregistered node then denies the command to everyone, operators included, because
-  `has_permission` falls through to a registry lookup that misses. In game the client
-  hides commands you cannot use, so the symptom is `Unknown command` with nothing in the log.
-- **Config files live in `data/`**, not next to the executable, so an `ops.json` dropped in
-  the wrong folder is silently ignored and nobody ends up an operator.
+- **A permission node that does not start with the plugin's exact name is refused.**
+  `Context::register_permission` returns that as an `Err`, which is easy to discard by accident.
+  An unregistered node then denies the command to *everyone*, operators included, because
+  `has_permission` falls through to a registry lookup that misses. In game the client hides
+  commands you cannot use, so the symptom is `Unknown command` with nothing in the log.
+- **Config files live in `data/`**, not next to the executable, so an `ops.json` dropped in the
+  wrong folder is silently ignored and nobody ends up an operator.
 
-Neither is this plugin's fault. They are worth knowing before writing any other plugin.
+Neither is this plugin's fault. Neither is versioned or linked here, so treat them as
+observations about the build in front of you rather than promises.
 
 ## Development
 
@@ -378,14 +546,16 @@ feedback loop. What they cannot check is what a real client sees, which is the o
 
 | Path | What lives there |
 |:--|:--|
-| `src/protocol.rs` | The wire format, limits, validation |
-| `src/tokens.rs` | Scanning and substituting `%placeholder%` |
-| `src/expansion.rs` | Expansions and namespaces |
-| `src/builtins.rs` | The built in placeholder table |
-| `src/client.rs` | The consumer side, and `answer` for expansion authors |
-| `src/command.rs` | `/papi` |
-| `src/plugin.rs` | The provider's IPC surface and cache |
-| `tests/protocol.rs` | Unit tests |
+| `crates/pumpkin-papi/src/lib.rs` | Crate docs and re-exports |
+| `crates/pumpkin-papi/src/protocol.rs` | The wire format, limits, validation |
+| `crates/pumpkin-papi/src/tokens.rs` | Scanning and substituting `%placeholder%` |
+| `crates/pumpkin-papi/src/expansion.rs` | Expansions and namespaces |
+| `crates/pumpkin-papi/src/builtins.rs` | The built in placeholder table |
+| `crates/pumpkin-papi/src/client.rs` | The consumer side, and `answer` for expansion authors |
+| `crates/pumpkin-papi/src/command.rs` | `/papi` |
+| `crates/pumpkin-papi/src/plugin.rs` | The provider's IPC surface and cache |
+| `crates/pumpkin-papi/tests/protocol.rs` | Token, protocol and registry tests |
+| `crates/pumpkin-papi/tests/registration.rs` | Pins the permission node to the plugin name |
 
 ## Contributing
 
