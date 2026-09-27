@@ -1,0 +1,21 @@
+[package]
+name = "pumpkin-papi"
+description = "A PlaceholderAPI style placeholder provider for Pumpkin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# `rlib` so other plugins can depend on the client without pulling in the
+# plugin entry point, `cdylib` so the provider itself loads as a Wasm component.
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "2"
+pumpkin-plugin-api.workspace = true
+tracing.workspace = true

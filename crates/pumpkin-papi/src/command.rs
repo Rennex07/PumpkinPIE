@@ -1,0 +1,129 @@
+//! The `/papi` command, for checking a config by hand.
+
+use pumpkin_plugin_api::command::{
+    Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
+    CommandSuggestions, ConsumedArgs, StringType, SuggestionRequest,
+};
+use pumpkin_plugin_api::commands::{CommandHandler, CommandSuggestionHandler};
+use pumpkin_plugin_api::permission::{Permission, PermissionDefault, PermissionLevel};
+use pumpkin_plugin_api::text::{NamedColor, TextComponent};
+use pumpkin_plugin_api::{Context, Server};
+
+use crate::builtins;
+use crate::plugin;
+
+/// Permission required by `/papi`. The provider registers it here rather than
+/// asking for it in `metadata`, because a non empty list there makes the host
+/// prompt for it at load time.
+const USE_PERMISSION: &str = "pumpkin-papi:use";
+
+const USAGE: &str = "Usage: /papi parse <text> to resolve placeholders, \
+                     /papi expansions to list the registered expansions.";
+
+/// Most completions offered at once.
+const MAX_SUGGESTIONS: usize = 20;
+
+/// Registers `/papi` and the permission it needs.
+pub fn register(context: Context) {
+    let _ = context.register_permission(&Permission {
+        node: USE_PERMISSION.to_string(),
+        description: "Allows using /papi.".to_string(),
+        default: PermissionDefault::Op(PermissionLevel::Two),
+        children: Vec::new(),
+    });
+
+    context.register_command(root(), USE_PERMISSION);
+}
+
+fn root() -> Command {
+    Command::new(&["papi".to_string()], "Resolve and inspect placeholders")
+        .execute(PapiCommand)
+        .then(
+            CommandNode::literal("parse")
+                .execute(PapiCommand)
+                .suggest(PapiSuggestions)
+                .then(
+                    CommandNode::argument("text", &ArgumentType::String(StringType::Greedy))
+                        .execute(PapiCommand)
+                        .suggest(PapiSuggestions),
+                ),
+        )
+        .then(CommandNode::literal("expansions").execute(PapiCommand).suggest(PapiSuggestions))
+}
+
+/// The single handler behind every `/papi` branch.
+struct PapiCommand;
+
+impl CommandHandler for PapiCommand {
+    fn handle(
+        &self,
+        sender: CommandSender,
+        _server: Server,
+        args: ConsumedArgs,
+    ) -> std::result::Result<i32, CommandError> {
+        let requested = match args.get_value("text") {
+            Arg::Simple(value) | Arg::Msg(value) => value,
+            _ => String::new(),
+        };
+        if requested.is_empty() {
+            return help(&sender);
+        }
+
+        let viewer = sender.as_player().map(|player| player.get_name());
+        let line = plugin::resolve_line(viewer.as_deref(), &requested);
+        sender.send_message(TextComponent::text(&line.text));
+
+        if !line.unresolved.is_empty() {
+            let note = TextComponent::text(&format!(
+                "unresolved: {}",
+                line.unresolved.join(", ")
+            ));
+            sender.send_error(note.color_named(NamedColor::Red));
+        }
+        Ok(i32::try_from(line.unresolved.len()).unwrap_or(i32::MAX))
+    }
+}
+
+/// Bare `/papi`, or `/papi` with nothing to parse.
+fn help(sender: &CommandSender) -> std::result::Result<i32, CommandError> {
+    sender.send_message(TextComponent::text(USAGE));
+    for builtin in builtins::BUILTINS {
+        sender.send_message(TextComponent::text(&format!(
+            "%{}%  {}",
+            builtin.id, builtin.description
+        )));
+    }
+    for entry in plugin::expansion_summary() {
+        sender.send_message(TextComponent::text(&entry));
+    }
+    Ok(0)
+}
+
+/// Offers `%placeholder%` completions for the token the cursor sits in.
+struct PapiSuggestions;
+
+impl CommandSuggestionHandler for PapiSuggestions {
+    fn suggest(
+        &self,
+        _sender: CommandSender,
+        _server: Server,
+        request: SuggestionRequest,
+    ) -> CommandSuggestions {
+        let cursor = (request.cursor as usize).min(request.input.len());
+        let typed = &request.input[..cursor];
+        let start = typed.rfind('%').map_or(typed.len(), |index| index + 1);
+        let prefix = typed[start..].to_ascii_lowercase();
+
+        let values = plugin::registered()
+            .into_iter()
+            .filter(|entry| entry.id.starts_with(&prefix))
+            .take(MAX_SUGGESTIONS)
+            .map(|entry| CommandSuggestion {
+                value: format!("%{}%", entry.id),
+                tooltip: Some(TextComponent::text(&entry.description)),
+            })
+            .collect();
+
+        CommandSuggestions { start: start as u32, length: prefix.len() as u32, values }
+    }
+}
