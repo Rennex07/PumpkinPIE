@@ -88,7 +88,7 @@ Copy `target/wasm32-wasip2/release/pumpkin_papi.wasm` into your Pumpkin server's
 folder and start the server. You should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 16 built in placeholders
+[INFO] PumpkinPAPI 0.1.0 ready with 11 built in placeholders
 ```
 
 Then, in game, as an operator:
@@ -112,11 +112,6 @@ failing, so the same text works globally and per player.
 | `%player_team%` | `red` | Scoreboard team |
 | `%player_health%` | `6.5` | |
 | `%player_max_health%` | `20` | |
-| `%player_x%` | `1.23` | |
-| `%player_y%` | `64` | |
-| `%player_z%` | `-8.5` | |
-| `%player_yaw%` | `90` | |
-| `%player_pitch%` | `-12` | |
 | `%player_has_permission:NODE%` | `true` | Takes an argument, see below |
 | `%server_online%` | `5` | |
 | `%server_max_players%` | `20` | |
@@ -132,6 +127,10 @@ That rule is why these are missing, and asking for one of them is not a bug repo
 - **Op level** — superseded by a permission manager. `%player_has_permission:NODE%` is the
   primitive.
 - **Scoreboard team, food, saturation, experience** — survival state nobody puts in a tab list.
+- **Position and rotation** — `%player_x%`, `%player_y%`, `%player_z%`, `%player_yaw%`,
+  `%player_pitch%`. Coordinates change every tick, so caching them is useless, and a plugin
+  that wants a location should read the player directly rather than route it through a
+  placeholder API.
 - **Client locale, MOTD, difficulty, online percentage, hardcore, online mode, whitelist** —
   server trivia, and the last few change on restart rather than per player.
 
@@ -146,7 +145,7 @@ this plugin.
 A placeholder can take one argument, written after a colon:
 
 ```
-%player_has_permission:pumpkin-papi:use%
+%player_has_permission:PumpkinPAPI:use%
 ```
 
 An argument may contain letters, digits and `_ . - : /`. A placeholder that needs an argument
@@ -154,7 +153,7 @@ and does not get one resolves to an empty string.
 
 ## Commands
 
-All commands need the `pumpkin-papi:use` permission, which operators have by default.
+All commands need the `PumpkinPAPI:use` permission, which operators have by default.
 
 | Command | What it does |
 |:--|:--|
@@ -347,6 +346,20 @@ Worth reading before porting a config over:
   does not expose cheaply.
 - **No offline player support.** The viewer has to be online.
 - **`get_placeholder_value` takes an id, not a text.** There is no `%placeholder%` string to parse.
+
+## Known rough edges
+
+Two things in the plugin API fail quietly, and both cost real time:
+
+- **A permission node that does not start with the plugin's exact name is refused,** and
+  `Context::register_permission` returns that as an `Err` you can ignore by accident. An
+  unregistered node then denies the command to everyone, operators included, because
+  `has_permission` falls through to a registry lookup that misses. In game the client
+  hides commands you cannot use, so the symptom is `Unknown command` with nothing in the log.
+- **Config files live in `data/`**, not next to the executable, so an `ops.json` dropped in
+  the wrong folder is silently ignored and nobody ends up an operator.
+
+Neither is this plugin's fault. They are worth knowing before writing any other plugin.
 
 ## Development
 

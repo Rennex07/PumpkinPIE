@@ -97,45 +97,6 @@ pub static BUILTINS: &[Builtin] = &[
         takes_arg: false,
     },
     Builtin {
-        id: "player_yaw",
-        description: "The viewer's yaw",
-        resolve: |context| Some(number(context.viewer?.get_yaw() as f64, 1)),
-        takes_arg: false,
-    },
-    Builtin {
-        id: "player_pitch",
-        description: "The viewer's pitch",
-        resolve: |context| Some(number(context.viewer?.get_pitch() as f64, 1)),
-        takes_arg: false,
-    },
-    Builtin {
-        id: "player_x",
-        description: "The viewer's X coordinate",
-        resolve: |context| {
-            let (x, _, _) = context.viewer?.get_position();
-            Some(number(x, 2))
-        },
-        takes_arg: false,
-    },
-    Builtin {
-        id: "player_y",
-        description: "The viewer's Y coordinate",
-        resolve: |context| {
-            let (_, y, _) = context.viewer?.get_position();
-            Some(number(y, 2))
-        },
-        takes_arg: false,
-    },
-    Builtin {
-        id: "player_z",
-        description: "The viewer's Z coordinate",
-        resolve: |context| {
-            let (_, _, z) = context.viewer?.get_position();
-            Some(number(z, 2))
-        },
-        takes_arg: false,
-    },
-    Builtin {
         id: "player_has_permission",
         description: "Whether the viewer holds a permission node",
         resolve: |context| {

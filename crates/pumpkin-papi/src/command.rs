@@ -8,14 +8,17 @@ use pumpkin_plugin_api::commands::{CommandHandler, CommandSuggestionHandler};
 use pumpkin_plugin_api::permission::{Permission, PermissionDefault, PermissionLevel};
 use pumpkin_plugin_api::text::{NamedColor, TextComponent};
 use pumpkin_plugin_api::{Context, Server};
+use tracing::warn;
 
 use crate::builtins;
 use crate::plugin;
 
-/// Permission required by `/papi`. The provider registers it here rather than
-/// asking for it in `metadata`, because a non empty list there makes the host
-/// prompt for it at load time.
-const USE_PERMISSION: &str = "pumpkin-papi:use";
+/// Permission required by `/papi`.
+///
+/// It has to be namespaced with the provider's exact plugin name, because
+/// `Context::register_permission` refuses any other namespace and a node that
+/// was never registered denies everyone, operators included.
+const USE_PERMISSION: &str = "PumpkinPAPI:use";
 
 const USAGE: &str = "Usage: /papi parse <text> to resolve placeholders, \
                      /papi expansions to list the registered expansions.";
@@ -23,14 +26,24 @@ const USAGE: &str = "Usage: /papi parse <text> to resolve placeholders, \
 /// Most completions offered at once.
 const MAX_SUGGESTIONS: usize = 20;
 
+/// The permission node `/papi` is gated on, exposed for tests and docs.
+#[must_use]
+pub const fn use_permission() -> &'static str {
+    USE_PERMISSION
+}
+
 /// Registers `/papi` and the permission it needs.
 pub fn register(context: Context) {
-    let _ = context.register_permission(&Permission {
+    if let Err(error) = context.register_permission(&Permission {
         node: USE_PERMISSION.to_string(),
         description: "Allows using /papi.".to_string(),
         default: PermissionDefault::Op(PermissionLevel::Two),
         children: Vec::new(),
-    });
+    }) {
+        // Swallowing this leaves the node unregistered, which denies the command
+        // to everyone while looking exactly like the command not existing.
+        warn!("could not register {USE_PERMISSION}, /papi will be unusable: {error}");
+    }
 
     context.register_command(root(), USE_PERMISSION);
 }
