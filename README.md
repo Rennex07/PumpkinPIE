@@ -12,8 +12,7 @@ plugins add their own placeholders by registering an expansion.
 
 ## Status
 
-Early. Protocol version `0`, so the shape may still change. The Python implementation is on
-the `python` branch, kept as a second implementation of the same protocol.
+Early. Protocol version `0`, so the shape may still change.
 
 ## Why
 
@@ -394,7 +393,8 @@ Some things that would help:
   without noticing.
 - **A second implementation.** The protocol is the contract, not this plugin. If you would rather
   write the provider in another language, the protocol version and the operation names are the
-  only things consumers depend on. The `python` branch is already one.
+  only things consumers depend on. That is what the [Protocol](#protocol) section is for, and it
+  is deliberately complete enough to implement against without reading this crate.
 
 If you send a pull request, please say which Pumpkin version you built against and whether you
 tested it in game. Bug reports are most useful with the log line the provider printed.
