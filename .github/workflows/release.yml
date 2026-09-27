@@ -62,9 +62,6 @@ jobs:
             target/wasm32-wasip2/release/pumpkin_pie_testexp.wasm
             target/wasm32-wasip2/release/pumpkin_pie_consumer.wasm
 
-      - name: Package the provider
-        run: Compress-Archive -Path target\wasm32-wasip2\release\pumpkin_pie_plugin.wasm -DestinationPath pumpkin-pie-${{ inputs.tag || github.ref_name }}.zip
-
       # Recorded before the release body needs it, and from the same path the
       # clone used rather than a relative `Pumpkin`, which is not in the
       # workspace.
@@ -74,17 +71,22 @@ jobs:
           $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
           "sha=$(git -C $dest rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
+      # The component is attached bare rather than zipped. It is the only file
+      # that ships, and a server admin's next step is to drop it into a `plugins`
+      # folder, which is one click from a `.wasm` and two from a zip.
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: pumpkin-pie-${{ inputs.tag || github.ref_name }}.zip
+          files: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
           body: |
-            Drop `pumpkin_pie_plugin.wasm` into your server's `plugins/`
-            directory alongside the Pumpkin build it was compiled against.
+            Download `pumpkin_pie_plugin.wasm` and drop it into your server's
+            `plugins` directory, alongside a server built from the Pumpkin
+            revision below.
 
             Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
             `${{ steps.pumpkin.outputs.sha }}`. A component built against a
-            different `pumpkin-plugin-api` WIT fails to load, so use a release
-            matching your server.
+            different `pumpkin-plugin-api` WIT fails to load with
+            `type-checking export func handle-event`, so use a release matching
+            your server.
           fail_on_unmatched_files: true

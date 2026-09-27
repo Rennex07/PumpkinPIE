@@ -128,9 +128,9 @@ Rules worth knowing up front:
 
 ### From a release
 
-Download `pumpkin-pie-<version>.zip` from the [releases page](https://github.com/Rennex07/PumpkinPIE/releases)
-and unzip `pumpkin_pie_plugin.wasm` into your Pumpkin server's `plugins/` folder. That is the
-whole install. Start the server and you should see:
+Download `pumpkin_pie_plugin.wasm` from the [releases page](https://github.com/Rennex07/PumpkinPIE/releases)
+and drop it into your Pumpkin server's `plugins/` folder. That is the whole install. Start the
+server and you should see:
 
 ```
 [INFO] PumpkinPIE 0.1.0 ready with 11 built in placeholders
@@ -679,24 +679,8 @@ tested it in game. Bug reports are most useful with the log line the provider pr
 
 ## Thanks
 
-This started because [RookTAB](https://github.com/xRookieFight/RookTAB) wanted `%player_ping%`
-and there was nowhere to ask for it. Every design decision here traces back to a plugin that
-needed one specific placeholder and could not reach the server.
-
-It was also built by someone who cannot play Minecraft, which turns out to be a useful
-constraint. Everything in [Status](#status) was verified by starting a server and typing commands
-at it, and two of the bugs that mattered most were invisible to the compiler and to the tests. A
-permission node that was never registered looked exactly like a command that did not exist. An
-expansion unregistering on unload looked exactly like a clean shutdown, right up until the store
-driver reported a trap. Neither would ever have been found by reading the code carefully; both
-were found by running the thing and reading the log.
-
 If you use this, or write an expansion for it, or just tell someone about it, that is worth more
 than a star. PRs are welcome and so is a note saying which placeholder you had to work around.
-
-Earlier work on this lived under [Epix Development](https://github.com/Epix-Development) and
-arrived here renamed. If you can see where the name came from, you have been reading it the way I
-wrote it.
 
 ## License
 
