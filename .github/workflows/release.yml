@@ -23,7 +23,7 @@ env:
   # fails to load with "type-checking export func `handle-event`", so this is
   # the one input that decides whether a release works.
   PUMPKIN_REPO: Pumpkin-MC/Pumpkin
-  PUMPKIN_REF: main
+  PUMPKIN_REF: master
 
 jobs:
   build:
