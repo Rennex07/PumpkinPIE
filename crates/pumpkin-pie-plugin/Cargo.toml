@@ -1,6 +1,6 @@
 [package]
-name = "pumpkin-papi-plugin"
-description = "The PumpkinPAPI provider plugin"
+name = "pumpkin-pie-plugin"
+description = "The PumpkinPIE provider plugin"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,10 +13,10 @@ authors.workspace = true
 # workspace with a `cdylib`, because it is the only one that calls
 # `register_plugin!`, and every plugin exports an `init-plugin` symbol. Two
 # crates exporting it cannot be linked together, so a plugin that consumes
-# PumpkinPAPI depends on `pumpkin-papi` alone and never on this.
+# PumpkinPIE depends on `pumpkin-pie` alone and never on this.
 crate-type = ["cdylib"]
 
 [dependencies]
-pumpkin-papi = { path = "../pumpkin-papi" }
+pumpkin-pie = { path = "../pumpkin-pie" }
 pumpkin-plugin-api.workspace = true
 tracing.workspace = true

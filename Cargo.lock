@@ -201,7 +201,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumpkin-papi"
+name = "pumpkin-pie"
 version = "0.1.0"
 dependencies = [
  "pumpkin-plugin-api",
@@ -212,28 +212,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumpkin-papi-consumer"
+name = "pumpkin-pie-consumer"
 version = "0.1.0"
 dependencies = [
- "pumpkin-papi",
+ "pumpkin-pie",
  "pumpkin-plugin-api",
  "tracing",
 ]
 
 [[package]]
-name = "pumpkin-papi-plugin"
+name = "pumpkin-pie-plugin"
 version = "0.1.0"
 dependencies = [
- "pumpkin-papi",
+ "pumpkin-pie",
  "pumpkin-plugin-api",
  "tracing",
 ]
 
 [[package]]
-name = "pumpkin-papi-testexp"
+name = "pumpkin-pie-testexp"
 version = "0.1.0"
 dependencies = [
- "pumpkin-papi",
+ "pumpkin-pie",
  "pumpkin-plugin-api",
  "tracing",
 ]

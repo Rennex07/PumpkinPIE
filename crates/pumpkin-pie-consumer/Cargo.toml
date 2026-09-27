@@ -1,6 +1,6 @@
 [package]
-name = "pumpkin-papi-consumer"
-description = "A consumer of PumpkinPAPI: proves the client API works from a separate plugin"
+name = "pumpkin-pie-consumer"
+description = "A consumer of PumpkinPIE: proves the client API works from a separate plugin"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,9 +13,9 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-# The library only, never `pumpkin-papi-plugin`. Both crates call
+# The library only, never `pumpkin-pie-plugin`. Both crates call
 # `register_plugin!`, which exports a symbol called `init-plugin`, so linking
 # both in is a duplicate-symbol error.
-pumpkin-papi = { path = "../pumpkin-papi" }
+pumpkin-pie = { path = "../pumpkin-pie" }
 pumpkin-plugin-api.workspace = true
 tracing.workspace = true

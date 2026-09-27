@@ -1,9 +1,9 @@
-//! `PapiConsumer`, a plugin that *asks* PumpkinPAPI for placeholders.
+//! `PieConsumer`, a plugin that *asks* PumpkinPIE for placeholders.
 //!
 //! The other plugins in this workspace test the provider from the outside:
-//! `pumpkin-papi-plugin` is the provider, and `pumpkin-papi-testexp` pushes
+//! `pumpkin-pie-plugin` is the provider, and `pumpkin-pie-testexp` pushes
 //! values towards it. Neither exercises the direction a real consumer uses,
-//! which is a plugin calling [`PapiClient`] and getting text back over IPC.
+//! which is a plugin calling [`PieClient`] and getting text back over IPC.
 //! This one does, and it is the only way to find out that `set_placeholders`,
 //! `set_placeholders_batch` and `get_placeholder_value` survive a round trip
 //! through the wire format at all.
@@ -11,7 +11,7 @@
 //! Every check logs a line prefixed `CONSUMER-CHECK`, so a server log shows
 //! which calls crossed the IPC boundary and what came back.
 
-use pumpkin_papi::PapiClient;
+use pumpkin_pie::PieClient;
 use pumpkin_plugin_api::command::{
     Command, CommandError, CommandNode, CommandSender, ConsumedArgs,
 };
@@ -26,34 +26,34 @@ use pumpkin_plugin_api::register_plugin;
 
 /// The provider's plugin name, and so its IPC address. Listed in
 /// `PluginMetadata::dependencies` so this plugin loads after it.
-const PROVIDER: &str = "PumpkinPAPI";
+const PROVIDER: &str = "PumpkinPIE";
 
 /// Prefix on every check line, so the log can be grepped for the calls that
 /// actually crossed IPC.
 const LOG_PREFIX: &str = "CONSUMER-CHECK";
 
-/// Permission required by `/papicheck`.
+/// Permission required by `/piecheck`.
 ///
 /// Namespaced with this plugin's exact name, because
 /// `Context::register_permission` refuses any other namespace, and a node that
 /// was never registered denies the command to everyone, operators included. In
 /// game that looks exactly like the command not existing.
-const USE_PERMISSION: &str = "PapiConsumer:use";
+const USE_PERMISSION: &str = "PieConsumer:use";
 
 /// The consumer plugin. Holds no state of its own.
-pub struct PapiConsumer;
+pub struct PieConsumer;
 
-impl Plugin for PapiConsumer {
+impl Plugin for PieConsumer {
     fn new() -> Self {
         Self
     }
 
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
-            name: "PapiConsumer".to_string(),
+            name: "PieConsumer".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             authors: vec!["Rennex".to_string()],
-            description: "Exercises the PumpkinPAPI client API end to end".to_string(),
+            description: "Exercises the PumpkinPIE client API end to end".to_string(),
             dependencies: vec![PROVIDER.to_string()],
             permissions: vec![],
         }
@@ -62,22 +62,22 @@ impl Plugin for PapiConsumer {
     fn on_load(&self, context: Context) -> Result<()> {
         if let Err(error) = context.register_permission(&Permission {
             node: USE_PERMISSION.to_string(),
-            description: "Allows using /papicheck.".to_string(),
+            description: "Allows using /piecheck.".to_string(),
             default: PermissionDefault::Op(PermissionLevel::Two),
             children: Vec::new(),
         }) {
-            error!("could not register {USE_PERMISSION}, /papicheck will be unusable: {error}");
+            error!("could not register {USE_PERMISSION}, /piecheck will be unusable: {error}");
         }
         context.register_command(command(), USE_PERMISSION);
-        info!("PapiConsumer {} ready", env!("CARGO_PKG_VERSION"));
+        info!("PieConsumer {} ready", env!("CARGO_PKG_VERSION"));
         Ok(())
     }
 
     fn on_unload(&self, _context: Context) -> Result<()> {
         // Nothing was registered with the provider, so there is nothing to
         // release, and messaging a provider that has already unloaded traps the
-        // guest. See the same note in `pumpkin-papi-testexp`.
-        info!("PapiConsumer unloaded");
+        // guest. See the same note in `pumpkin-pie-testexp`.
+        info!("PieConsumer unloaded");
         Ok(())
     }
 }
@@ -85,7 +85,7 @@ impl Plugin for PapiConsumer {
 fn command() -> Command {
     Command::new(
         &["papicheck".to_string()],
-        "Run the PumpkinPAPI client API checks",
+        "Run the PumpkinPIE client API checks",
     )
     .execute(CheckCommand)
     .then(CommandNode::literal("run").execute(CheckCommand))
@@ -100,7 +100,7 @@ impl CommandHandler for CheckCommand {
         _server: Server,
         _args: ConsumedArgs,
     ) -> std::result::Result<i32, CommandError> {
-        let papi = PapiClient::new();
+        let papi = PieClient::new();
         let mut failures = 0;
 
         // The console has no player, so a name is used to exercise the
@@ -244,7 +244,7 @@ fn report(sender: &CommandSender, label: &str, value: &str) {
 
 // The plugin's entry point is the `init-plugin` export a component needs, and
 // nothing on a host build wants it. Gating it to `wasm32` also keeps
-// `pumpkin-papi`'s own copy of that symbol from colliding with this crate's
+// `pumpkin-pie`'s own copy of that symbol from colliding with this crate's
 // when the test harness links.
 #[cfg(target_arch = "wasm32")]
-register_plugin!(PapiConsumer);
+register_plugin!(PieConsumer);

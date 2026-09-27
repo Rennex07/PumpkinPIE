@@ -1,7 +1,7 @@
-# PumpkinPAPI
+# PumpkinPIE
 
-A placeholder provider for [Pumpkin](https://github.com/Pumpkin-MC/Pumpkin), modelled on
-[PlaceholderAPI](https://github.com/PlaceholderAPI/PlaceholderAPI).
+**P**laceholder **I**ntegration **E**ngine for [Pumpkin](https://github.com/Pumpkin-MC/Pumpkin),
+modelled on [PlaceholderAPI](https://github.com/PlaceholderAPI/PlaceholderAPI).
 
 It answers `%player_name%`, `%player_ping%`, `%server_online%` and friends, and lets other
 plugins add their own placeholders by registering an expansion.
@@ -31,18 +31,18 @@ Verified on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**, dr
 over its console so no client is needed. Three components load together: the provider, an
 expansion, and a consumer.
 
-The expansion path, via `crates/pumpkin-papi-testexp`:
+The expansion path, via `crates/pumpkin-pie-testexp`:
 
 | Check | Result |
 |:--|:--|
 | `register_expansion` on two namespaces | accepted, and the applied TTL comes back as asked |
-| `on_request` round trip | the expansion's answer reaches `/papi parse` |
+| `on_request` round trip | the expansion's answer reaches `/pie parse` |
 | `Cache::Never` | `%testexp_count%` re-asked the expansion on every resolve, incrementing each time |
 | `Cache::Ttl` | asked 3 times, called back **once** |
 | Declining with `None` | `%testexp_nope%` stayed literal and was reported unresolved |
 | Case insensitivity | `%testexp_COUNT%` resolved, reaching the expansion as `name=count` |
 
-The consumer path, via `crates/pumpkin-papi-consumer` and its `/papicheck`, which is the direction
+The consumer path, via `crates/pumpkin-pie-consumer` and its `/piecheck`, which is the direction
 a tab list or scoreboard plugin actually uses:
 
 | Check | Result |
@@ -70,7 +70,7 @@ Pumpkin has no PlaceholderAPI equivalent. A tab list plugin, a scoreboard plugin
 plugin that wants `%player_ping%` has to reach into the server API itself, and two plugins that
 both want to show a rank end up inventing two incompatible formats.
 
-PumpkinPAPI gives them one place to ask. It is a plugin, not a change to Pumpkin, so it installs
+PumpkinPIE gives them one place to ask. It is a plugin, not a change to Pumpkin, so it installs
 and removes without touching the server.
 
 ## How it works
@@ -80,7 +80,7 @@ string. Plugins that also *provide* them register a namespace, and the provider 
 when one of their placeholders is needed.
 
 ```
-Consumer plugin                    PumpkinPAPI                    Expansion plugin
+Consumer plugin                    PumpkinPIE                    Expansion plugin
       |                                  |                                |
       |  set_placeholders                |                                |
       |  "%player_ping% %ranks_prefix%"  |                                |
@@ -95,7 +95,7 @@ Consumer plugin                    PumpkinPAPI                    Expansion plug
 
 This is the shape Java PlaceholderAPI uses:
 
-| Java PlaceholderAPI                   | PumpkinPAPI                                   |
+| Java PlaceholderAPI                   | PumpkinPIE                                   |
 |:--------------------------------------|:----------------------------------------------|
 | `PlaceholderAPI.setPlaceholders(p, t)` | `set_placeholders`                            |
 | `getPlaceholderValue(p, text)`        | `get_placeholder_value` (takes an **id**, not text) |
@@ -104,7 +104,7 @@ This is the shape Java PlaceholderAPI uses:
 | `unregisterPlaceholderExpansion(exp)` | `unregister_expansion`                        |
 | `PlaceholderExpansion.getIdentifier()` | the `namespace` you register                  |
 | `onRequest(player, identifier)`       | `on_request` (the provider sends this to you) |
-| the built in `internal` expansion     | the `player`, `server` and `papi` namespaces  |
+| the built in `internal` expansion     | the `player`, `server` and `pie` namespaces  |
 | `setPlaceholders` for many players    | `set_placeholders_batch`                      |
 | `Cacheable` and a TTL in `config.yml` | `Cache::Ttl` on registration                  |
 
@@ -112,7 +112,7 @@ Rules worth knowing up front:
 
 - **A placeholder is `%namespace_name%`.** The namespace is everything before the first
   underscore, so `%luckperms_prefix%` belongs to whoever registered `luckperms`.
-- **`player`, `server` and `papi` are reserved.** The provider answers them, and an expansion
+- **`player`, `server` and `pie` are reserved.** The provider answers them, and an expansion
   cannot claim them.
 - **Ids are case insensitive.** `%Player_Ping%` and `%player_ping%` are the same placeholder.
 - **A placeholder nobody can resolve is left in the text as written.** Not an error, not an
@@ -126,12 +126,12 @@ Rules worth knowing up front:
 
 ### From a release
 
-Download `pumpkin-papi-<version>.zip` from the [releases page](https://github.com/Rennex07/PumpkinPAPI/releases)
-and unzip `pumpkin_papi_plugin.wasm` into your Pumpkin server's `plugins/` folder. That is the
+Download `pumpkin-pie-<version>.zip` from the [releases page](https://github.com/Rennex07/PumpkinPIE/releases)
+and unzip `pumpkin_pie_plugin.wasm` into your Pumpkin server's `plugins/` folder. That is the
 whole install. Start the server and you should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 11 built in placeholders
+[INFO] PumpkinPIE 0.1.0 ready with 11 built in placeholders
 ```
 
 **Use a release built against your server.** A component is compiled against a specific
@@ -149,7 +149,7 @@ behind the server's WIT and this repository pins the crate to a path.
 git clone https://github.com/Pumpkin-MC/Pumpkin.git
 
 # 2. This plugin, as a sibling of that checkout.
-git clone https://github.com/Rennex07/PumpkinPAPI.git
+git clone https://github.com/Rennex07/PumpkinPIE.git
 ```
 
 So the two directories end up side by side, which is what the `../Pumpkin` in `Cargo.toml`
@@ -158,7 +158,7 @@ expects:
 ```
 somewhere/
 ├── Pumpkin/          <- the server sources
-└── PumpkinPAPI/      <- this
+└── PumpkinPIE/      <- this
 ```
 
 If you keep them elsewhere, edit the `[patch.crates-io]` path in `Cargo.toml`. It points at
@@ -172,14 +172,14 @@ rustup target add wasm32-wasip2
 cargo build --release --target wasm32-wasip2
 ```
 
-Copy `target/wasm32-wasip2/release/pumpkin_papi_plugin.wasm` into your Pumpkin server's `plugins/`
+Copy `target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm` into your Pumpkin server's `plugins/`
 folder. (`cargo component build` also works, but plain `cargo build` is enough: the crate is
 already a `cdylib` targeting `wasm32-wasip2`.)
 
 Then, in game, as an operator of level 2 or above:
 
 ```
-/papi parse %player_name% has %player_ping% ms
+/pie parse %player_name% has %player_ping% ms
 ```
 
 ## Built in placeholders
@@ -235,7 +235,7 @@ this plugin.
 A placeholder can take one argument, written after a colon:
 
 ```
-%player_has_permission:PumpkinPAPI:use%
+%player_has_permission:PumpkinPIE:use%
 ```
 
 An argument may contain letters, digits and `_ . - : /`. The argument is **only reachable through
@@ -244,21 +244,21 @@ argument, so asking it for `player_has_permission` always reports `known: false`
 
 ## Commands
 
-All commands need the `PumpkinPAPI:use` permission, which is granted to **op level 2 and above**
+All commands need the `PumpkinPIE:use` permission, which is granted to **op level 2 and above**
 by default. The node is registered when the plugin loads rather than declared in its metadata,
 so it does not show up in a permissions listing.
 
-The node has to be namespaced with the plugin's exact name. `PumpkinPAPI:use`, case-sensitive —
-`pumpkin-papi:use` is refused, and a node that was never registered denies the command to
+The node has to be namespaced with the plugin's exact name. `PumpkinPIE:use`, case-sensitive —
+`pumpkin-pie:use` is refused, and a node that was never registered denies the command to
 *everyone*, operators included.
 
 | Command | What it does |
 |:--|:--|
-| `/papi parse <text>` | Resolves `<text>` and prints the result |
-| `/papi` | Prints the usage line and every placeholder |
-| `/papi expansions` | Lists registered expansions and who owns them |
+| `/pie parse <text>` | Resolves `<text>` and prints the result |
+| `/pie` | Prints the usage line and every placeholder |
+| `/pie expansions` | Lists registered expansions and who owns them |
 
-`/papi parse` reports what it could not resolve as a **red error line** and returns a non-zero
+`/pie parse` reports what it could not resolve as a **red error line** and returns a non-zero
 result, so it doubles as a way to check a config. Tab completion offers `%id%` values, up to 20
 at a time.
 
@@ -268,13 +268,13 @@ The repository has two crates, and the split is not cosmetic:
 
 | Crate | You want it when |
 | --- | --- |
-| `pumpkin-papi` | You are writing a plugin that resolves placeholders, or one that provides them. A plain `rlib`. |
-| `pumpkin-papi-plugin` | You are building PumpkinPAPI itself. The `cdylib` you drop into `plugins/`. |
+| `pumpkin-pie` | You are writing a plugin that resolves placeholders, or one that provides them. A plain `rlib`. |
+| `pumpkin-pie-plugin` | You are building PumpkinPIE itself. The `cdylib` you drop into `plugins/`. |
 
-**Depend on `pumpkin-papi` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so
+**Depend on `pumpkin-pie` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so
 a plugin that links both crates fails to compile with `duplicate symbol: init-plugin`. There is no
 link-time workaround worth having: the linker keeps whichever definition it sees first, and you
-would silently ship a component that registers PumpkinPAPI's namespaces instead of your own. The
+would silently ship a component that registers PumpkinPIE's namespaces instead of your own. The
 split above removes the option by making the dependency one-directional.
 
 The crate is not on crates.io yet, so depend on it from git, and **add the same
@@ -283,7 +283,7 @@ effect on yours:
 
 ```toml
 [dependencies]
-pumpkin-papi = { git = "https://github.com/Rennex07/PumpkinPAPI" }
+pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
@@ -296,32 +296,32 @@ server's WIT.
 ### Consuming placeholders
 
 ```rust
-use pumpkin_papi::{PapiClient, PapiError};
+use pumpkin_pie::{PieClient, PieError};
 
-fn render() -> Result<(), PapiError> {
-    let papi = PapiClient::new();
+fn render() -> Result<(), PieError> {
+    let pie = PieClient::new();
 
-    let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
+    let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
     println!("{}   unresolved: {:?}", line.text, line.unresolved);
 
-    let online = papi.get_placeholder_value(None, "server_online")?;   // Option<String>
-    let all = papi.get_registered_placeholders()?;
+    let online = pie.get_placeholder_value(None, "server_online")?;   // Option<String>
+    let all = pie.get_registered_placeholders()?;
     Ok(())
 }
 ```
 
-Every call returns `Result<_, PapiError>`. `PapiError::Unreachable` is the one to expect on a
+Every call returns `Result<_, PieError>`. `PieError::Unreachable` is the one to expect on a
 first run: it means the provider plugin is not installed, is named differently, or your plugin
 messaged itself. Pumpkin reports all three the same way, so check the server log first.
 
-`crates/pumpkin-papi-consumer` is a working plugin that does all of this, so you can read a real
-one rather than a fragment. Its `/papicheck` command runs each call and logs what came back.
+`crates/pumpkin-pie-consumer` is a working plugin that does all of this, so you can read a real
+one rather than a fragment. Its `/piecheck` command runs each call and logs what came back.
 
 Refreshing a tab list or a scoreboard for every player, which is what batching exists for:
 
 ```rust
 let lines = [("Steve", "%player_ping%ms"), ("Alex", "%player_ping%ms")];
-let results = papi.set_placeholders_batch(&lines)?;   // one message, not one per player
+let results = pie.set_placeholders_batch(&lines)?;   // one message, not one per player
 ```
 
 Every batch line carries a viewer. The protocol allows a line with no viewer, but there is no
@@ -333,11 +333,11 @@ This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin
 `PluginMetadata`, and `register_plugin!`.
 
 ```rust
-// `IpcMessage` and `PluginId` come from `pumpkin_papi`, not from
+// `IpcMessage` and `PluginId` come from `pumpkin_pie`, not from
 // `pumpkin_plugin_api`: the API crate keeps its `wit` module private, so the
-// IPC types are not re-exported from there. `pumpkin_papi` re-exports them so
+// IPC types are not re-exported from there. `pumpkin_pie` re-exports them so
 // you need only two imports.
-use pumpkin_papi::{answer, Cache, IpcMessage, PapiClient, PapiError, PluginId};
+use pumpkin_pie::{answer, Cache, IpcMessage, PieClient, PieError, PluginId};
 use pumpkin_plugin_api::{Context, Plugin, PluginMetadata, Result};
 
 pub struct Ranks;
@@ -353,7 +353,7 @@ impl Plugin for Ranks {
             version: "0.1.0".to_string(),
             authors: vec!["you".to_string()],
             description: "Ranks as placeholders.".to_string(),
-            dependencies: vec!["PumpkinPAPI".to_string()],
+            dependencies: vec!["PumpkinPIE".to_string()],
             permissions: vec![],
         }
     }
@@ -379,12 +379,12 @@ impl Plugin for Ranks {
 impl Ranks {
     // `Cache::Ttl` lets the provider reuse your values instead of asking every
     // time. The provider clamps it, so a long TTL cannot serve stale ranks.
-    fn register(&self) -> Result<(), PapiError> {
-        let papi = PapiClient::new();
+    fn register(&self) -> Result<(), PieError> {
+        let pie = PieClient::new();
         // Read the `Registered` it hands back rather than assuming you got what
         // you asked for: the TTL you request is clamped to 60s, and the provider
         // reports what it actually applied.
-        let applied = papi.register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
+        let applied = pie.register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
         log::info!("ranks registered: {:?}", applied.cache);
         Ok(())
     }
@@ -428,10 +428,10 @@ There is no `Server` or `Player` reachable from inside the closure, so capture w
 need when you build it. Return `None` to decline, and the placeholder stays in the text.
 
 **Do not call back into the provider from inside `resolve`.** The provider asks you synchronously,
-from inside its own IPC handler, so reaching for a `PapiClient` there re-enters it while it is
+from inside its own IPC handler, so reaching for a `PieClient` there re-enters it while it is
 still inside the call that invoked you, and the server deadlocks.
 
-List `dependencies = ["PumpkinPAPI"]` in your metadata so you are only loaded once the provider
+List `dependencies = ["PumpkinPIE"]` in your metadata so you are only loaded once the provider
 is ready to answer.
 
 ### Limits
@@ -453,7 +453,7 @@ resolved once, so a line that repeats a value still costs one round trip.
 
 ### Caching
 
-An expansion that opts in with `Cache::Ttl` has its values cached per viewer, the way PAPI's
+An expansion that opts in with `Cache::Ttl` has its values cached per viewer, the way Java's
 `Cacheable` works. This is worth doing: on a server of any size, a tab list refreshing once a
 second asks for the same handful of placeholders for every player, every second, and most of
 those values barely move. The provider caps a TTL at 60 seconds so a plugin cannot serve stale
@@ -488,7 +488,7 @@ against an older revision keeps working.
 
 ```json
 -> {"op":"ping"}
-<- {"ok":true,"protocol":0,"name":"PumpkinPAPI","version":"0.1.0",
+<- {"ok":true,"protocol":0,"name":"PumpkinPIE","version":"0.1.0",
     "placeholders":11,"expansions":2}
 ```
 
@@ -501,7 +501,7 @@ ins *plus* every name an expansion declared, so the two numbers will not match.
 -> {"op":"get_registered_placeholders"}
 <- {"ok":true,"placeholders":[
       {"id":"player_name","description":"The viewer's name",
-       "namespace":"player","source":"PumpkinPAPI"}
+       "namespace":"player","source":"PumpkinPIE"}
     ]}
 ```
 
@@ -539,7 +539,7 @@ wants, because it is one message instead of one per player.
 ### `register_expansion`
 
 `placeholders` is what the provider advertises for your namespace in `get_registered_placeholders`
-and `/papi`. It is **not** a filter: the provider forwards any `%ranks_*%` to you whether you
+and `/pie`. It is **not** a filter: the provider forwards any `%ranks_*%` to you whether you
 listed it or not, which is why the `_ => None` arm in the example above matters. Omit the list,
 or leave it empty, if you would rather answer whatever you are asked.
 
@@ -630,22 +630,22 @@ Two things are worth knowing before you build:
 
 | Path | What lives there |
 |:--|:--|
-| `crates/pumpkin-papi/src/lib.rs` | Crate docs and re-exports |
-| `crates/pumpkin-papi/src/protocol.rs` | The wire format, limits, validation |
-| `crates/pumpkin-papi/src/tokens.rs` | Scanning and substituting `%placeholder%` |
-| `crates/pumpkin-papi/src/expansion.rs` | Expansions and namespaces |
-| `crates/pumpkin-papi/src/builtins.rs` | The built in placeholder table |
-| `crates/pumpkin-papi/src/client.rs` | The consumer side, and `answer` for expansion authors |
-| `crates/pumpkin-papi/tests/protocol.rs` | Token, protocol and registry tests |
-| `crates/pumpkin-papi/tests/readme_example.rs` | Compiles the example above, so the docs cannot rot |
-| `crates/pumpkin-papi-plugin/src/lib.rs` | The provider crate's entry point |
-| `crates/pumpkin-papi-plugin/src/plugin.rs` | The provider's IPC surface and cache |
-| `crates/pumpkin-papi-plugin/src/command.rs` | `/papi`, and the test pinning its permission node |
-| `crates/pumpkin-papi-testexp/src/lib.rs` | An expansion: registers namespaces and answers |
-| `crates/pumpkin-papi-consumer/src/lib.rs` | A consumer: calls the client API and logs what came back |
+| `crates/pumpkin-pie/src/lib.rs` | Crate docs and re-exports |
+| `crates/pumpkin-pie/src/protocol.rs` | The wire format, limits, validation |
+| `crates/pumpkin-pie/src/tokens.rs` | Scanning and substituting `%placeholder%` |
+| `crates/pumpkin-pie/src/expansion.rs` | Expansions and namespaces |
+| `crates/pumpkin-pie/src/builtins.rs` | The built in placeholder table |
+| `crates/pumpkin-pie/src/client.rs` | The consumer side, and `answer` for expansion authors |
+| `crates/pumpkin-pie/tests/protocol.rs` | Token, protocol and registry tests |
+| `crates/pumpkin-pie/tests/readme_example.rs` | Compiles the example above, so the docs cannot rot |
+| `crates/pumpkin-pie-plugin/src/lib.rs` | The provider crate's entry point |
+| `crates/pumpkin-pie-plugin/src/plugin.rs` | The provider's IPC surface and cache |
+| `crates/pumpkin-pie-plugin/src/command.rs` | `/pie`, and the test pinning its permission node |
+| `crates/pumpkin-pie-testexp/src/lib.rs` | An expansion: registers namespaces and answers |
+| `crates/pumpkin-pie-consumer/src/lib.rs` | A consumer: calls the client API and logs what came back |
 
 The two extra plugins are not decoration. They are the proof that a *different* plugin can link
-`pumpkin-papi` and be answered by the provider, which is the whole point of the crate split. They
+`pumpkin-pie` and be answered by the provider, which is the whole point of the crate split. They
 build in the same workspace with no linker flags, and their `TESTEXP-ON-REQUEST` and
 `CONSUMER-CHECK` log lines are how the provider and consumer paths were each verified on a live
 server. `testexp` pushes values towards the provider; `consumer` pulls them back out, which is

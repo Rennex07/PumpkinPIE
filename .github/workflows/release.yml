@@ -46,7 +46,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: PumpkinPAPI -> target
+          workspaces: PumpkinPIE -> target
 
       - name: Test
         run: cargo test
@@ -57,13 +57,13 @@ jobs:
       - name: Upload the two test plugins
         uses: actions/upload-artifact@v4
         with:
-          name: pumpkin-papi-test-plugins
+          name: pumpkin-pie-test-plugins
           path: |
-            target/wasm32-wasip2/release/pumpkin_papi_testexp.wasm
-            target/wasm32-wasip2/release/pumpkin_papi_consumer.wasm
+            target/wasm32-wasip2/release/pumpkin_pie_testexp.wasm
+            target/wasm32-wasip2/release/pumpkin_pie_consumer.wasm
 
       - name: Package the provider
-        run: Compress-Archive -Path target\wasm32-wasip2\release\pumpkin_papi_plugin.wasm -DestinationPath pumpkin-papi-${{ inputs.tag || github.ref_name }}.zip
+        run: Compress-Archive -Path target\wasm32-wasip2\release\pumpkin_pie_plugin.wasm -DestinationPath pumpkin-pie-${{ inputs.tag || github.ref_name }}.zip
 
       # Recorded before the release body needs it, and from the same path the
       # clone used rather than a relative `Pumpkin`, which is not in the
@@ -78,9 +78,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: pumpkin-papi-${{ inputs.tag || github.ref_name }}.zip
+          files: pumpkin-pie-${{ inputs.tag || github.ref_name }}.zip
           body: |
-            Drop `pumpkin_papi_plugin.wasm` into your server's `plugins/`
+            Drop `pumpkin_pie_plugin.wasm` into your server's `plugins/`
             directory alongside the Pumpkin build it was compiled against.
 
             Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at

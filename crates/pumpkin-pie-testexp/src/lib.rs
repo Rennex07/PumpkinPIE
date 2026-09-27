@@ -1,4 +1,4 @@
-//! `TestExp`, a placeholder expansion for PumpkinPAPI.
+//! `TestExp`, a placeholder expansion for PumpkinPIE.
 //!
 //! This plugin exists to prove the expansion path works end to end: it claims
 //! two namespaces, answers the provider's `on_request` callbacks, and logs every
@@ -20,7 +20,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use pumpkin_papi::{Cache, IpcMessage, PapiClient, PapiError, PluginId, RequestContext, answer};
+use pumpkin_pie::{Cache, IpcMessage, PieClient, PieError, PluginId, RequestContext, answer};
 use pumpkin_plugin_api::{Context, Plugin, PluginMetadata, Result};
 use tracing::info;
 
@@ -29,7 +29,7 @@ use pumpkin_plugin_api::register_plugin;
 
 /// The provider's plugin name, and therefore its IPC address. Listed in
 /// `PluginMetadata::dependencies` so this plugin loads after it.
-const PROVIDER: &str = "PumpkinPAPI";
+const PROVIDER: &str = "PumpkinPIE";
 
 /// Prefix on every request log, so the server log can be grepped for exactly
 /// the callbacks the provider made.
@@ -82,8 +82,8 @@ pub struct TestExp;
 
 impl TestExp {
     /// Claims both namespaces, refusing to start if either is refused.
-    fn register(&self) -> std::result::Result<(), PapiError> {
-        let papi = PapiClient::new();
+    fn register(&self) -> std::result::Result<(), PieError> {
+        let papi = PieClient::new();
 
         let uncached =
             papi.register_expansion("testexp", &["greeting", "count", "cached"], Cache::Never)?;
@@ -109,7 +109,7 @@ impl Plugin for TestExp {
             name: "TestExp".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             authors: vec!["Rennex".to_string()],
-            description: "Test expansion for PumpkinPAPI: registers a namespace and answers \
+            description: "Test expansion for PumpkinPIE: registers a namespace and answers \
                           its on_request callbacks, logging every one of them."
                 .to_string(),
             dependencies: vec![PROVIDER.to_string()],
@@ -125,10 +125,10 @@ impl Plugin for TestExp {
 
     fn on_unload(&self, _context: Context) -> Result<()> {
         // Deliberately does not unregister. Plugins unload in load order, so
-        // PumpkinPAPI's store is already gone by the time this runs, and
+        // PumpkinPIE's store is already gone by the time this runs, and
         // messaging it traps the guest: the log showed
         // "Wasm plugin store driver stopped" straight after
-        // "PumpkinPAPI unloaded" with no line from here at all.
+        // "PumpkinPIE unloaded" with no line from here at all.
         //
         // Nothing needs cleaning up anyway. The provider drops a source's
         // namespaces and cached values when it gets `unregister_expansion`,
@@ -149,7 +149,7 @@ impl Plugin for TestExp {
 
 // The plugin's entry point is the `init-plugin` export a component needs, and
 // nothing on a host build wants it. Gating it to `wasm32` also keeps
-// `pumpkin-papi`'s own copy of that symbol from colliding with this crate's
+// `pumpkin-pie`'s own copy of that symbol from colliding with this crate's
 // when the test harness links, which is the only build where both end up in
 // one binary.
 #[cfg(target_arch = "wasm32")]
@@ -159,8 +159,8 @@ register_plugin!(TestExp);
 mod tests {
     use super::*;
 
-    use pumpkin_papi::protocol::{decode_response, encode};
-    use pumpkin_papi::{Request, Success};
+    use pumpkin_pie::protocol::{decode_response, encode};
+    use pumpkin_pie::{Request, Success};
 
     /// Runs one `on_request` through the plugin and returns the value it sent
     /// back, so these cover `answer` and [`resolve`] together.

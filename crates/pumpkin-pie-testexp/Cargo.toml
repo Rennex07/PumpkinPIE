@@ -1,6 +1,6 @@
 [package]
-name = "pumpkin-papi-testexp"
-description = "A test expansion for PumpkinPAPI: proves register_expansion and on_request work"
+name = "pumpkin-pie-testexp"
+description = "A test expansion for PumpkinPIE: proves register_expansion and on_request work"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,11 +13,11 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-# Depends on the library, never on `pumpkin-papi-plugin`. Both crates call
+# Depends on the library, never on `pumpkin-pie-plugin`. Both crates call
 # `register_plugin!`, which exports a symbol called `init-plugin`, so linking
 # both in is a duplicate-symbol error. Depending one-way means there is no
 # linker flag to set and no chance of silently keeping the provider's definition
 # instead of this plugin's own.
-pumpkin-papi = { path = "../pumpkin-papi" }
+pumpkin-pie = { path = "../pumpkin-pie" }
 pumpkin-plugin-api.workspace = true
 tracing.workspace = true

@@ -1,12 +1,12 @@
 //! Tests for the parts that are easy to break quietly: the token scanner, the
 //! JSON boundary, and the expansion table. None of it needs a server.
 
-use pumpkin_papi::Registry;
-use pumpkin_papi::protocol::{
-    Cache, MAX_CACHE_TTL_MS, ProtocolError, Request, Response, Success, check_name,
-    check_namespace, decode_request, decode_response, encode,
+use pumpkin_pie::Registry;
+use pumpkin_pie::protocol::{
+    Cache, MAX_CACHE_TTL_MS, ProtocolError, RESERVED_NAMESPACES, Request, Response, Success,
+    check_name, check_namespace, decode_request, decode_response, encode,
 };
-use pumpkin_papi::tokens::{find, substitute};
+use pumpkin_pie::tokens::{find, substitute};
 
 /// A resolver over a fixed table, so a test can say what exists and what does not.
 fn resolve_all<'a>(
@@ -156,7 +156,7 @@ mod wire {
     #[test]
     fn a_response_round_trips_and_keeps_its_flattened_body() {
         let response = Response::success(Success::ResolvedBatch {
-            results: vec![pumpkin_papi::protocol::ResolvedLine {
+            results: vec![pumpkin_pie::protocol::ResolvedLine {
                 text: "42ms".to_string(),
                 unresolved: vec![],
             }],
@@ -201,7 +201,7 @@ mod namespaces {
 
     #[test]
     fn reserved_namespaces_are_refused() {
-        for namespace in ["player", "server", "papi"] {
+        for namespace in RESERVED_NAMESPACES {
             assert!(
                 matches!(
                     check_namespace(namespace),
@@ -210,6 +210,13 @@ mod namespaces {
                 "{namespace} should be reserved"
             );
         }
+    }
+
+    #[test]
+    fn the_providers_own_prefix_is_reserved() {
+        // An expansion must not squat the provider's namespace, and that
+        // namespace is named after the provider.
+        assert!(RESERVED_NAMESPACES.contains(&"pie"));
     }
 
     #[test]

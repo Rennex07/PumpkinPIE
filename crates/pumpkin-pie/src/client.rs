@@ -1,12 +1,12 @@
-//! Consumer and expansion side of the PumpkinPAPI protocol.
+//! Consumer and expansion side of the PumpkinPIE protocol.
 //!
 //! Consuming placeholders:
 //!
 //! ```no_run
-//! use pumpkin_papi::{PapiClient, PapiError};
+//! use pumpkin_pie::{PieClient, PieError};
 //!
-//! # fn render() -> Result<(), PapiError> {
-//! let papi = PapiClient::new();
+//! # fn render() -> Result<(), PieError> {
+//! let papi = PieClient::new();
 //! let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms")?;
 //! # let _ = line.text;
 //! # Ok(())
@@ -16,10 +16,10 @@
 //! Providing them:
 //!
 //! ```no_run
-//! use pumpkin_papi::{Cache, IpcMessage, PapiClient, PapiError, answer};
+//! use pumpkin_pie::{Cache, IpcMessage, PieClient, PieError, answer};
 //!
-//! # fn on_load() -> Result<(), PapiError> {
-//! PapiClient::new().register_expansion("ranks", &["prefix"], Cache::Ttl { ms: 5_000 })?;
+//! # fn on_load() -> Result<(), PieError> {
+//! PieClient::new().register_expansion("ranks", &["prefix"], Cache::Ttl { ms: 5_000 })?;
 //! # Ok(())
 //! # }
 //!
@@ -35,7 +35,7 @@ use crate::protocol::{
 
 /// Why a call to the provider did not produce a value.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum PapiError {
+pub enum PieError {
     /// The provider is not loaded, the name is wrong, or the plugin messaged
     /// itself. The host reports all three the same way.
     #[error("{provider} is not reachable: it is not loaded, or the name is wrong")]
@@ -84,21 +84,21 @@ pub struct Registered {
     pub cache: Cache,
 }
 
-/// Talks to one PumpkinPAPI provider over Pumpkin's inter-plugin IPC.
+/// Talks to one PumpkinPIE provider over Pumpkin's inter-plugin IPC.
 ///
 /// Holds no state, so it is cheap to keep one around for the life of a plugin.
 #[derive(Debug, Clone)]
-pub struct PapiClient {
+pub struct PieClient {
     provider: String,
 }
 
-impl Default for PapiClient {
+impl Default for PieClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PapiClient {
+impl PieClient {
     /// A client for the provider with the default name.
     #[must_use]
     pub fn new() -> Self {
@@ -119,29 +119,29 @@ impl PapiClient {
         &self.provider
     }
 
-    fn send(&self, request: &Request) -> Result<Success, PapiError> {
-        let bytes = encode(request).map_err(PapiError::Unencodable)?;
+    fn send(&self, request: &Request) -> Result<Success, PieError> {
+        let bytes = encode(request).map_err(PieError::Unencodable)?;
         let reply = match pumpkin_plugin_api::ipc::send_ipc_message(&self.provider, &bytes) {
             Ok(Ok(reply)) => reply,
             Ok(Err(message)) => {
-                return Err(PapiError::Refused {
+                return Err(PieError::Refused {
                     provider: self.provider.clone(),
                     message,
                 });
             }
             Err(()) => {
-                return Err(PapiError::Unreachable {
+                return Err(PieError::Unreachable {
                     provider: self.provider.clone(),
                 });
             }
         };
-        let response: Response = decode_response(&reply).map_err(|error| PapiError::Malformed {
+        let response: Response = decode_response(&reply).map_err(|error| PieError::Malformed {
             provider: self.provider.clone(),
             message: error.to_string(),
         })?;
         response
             .into_success()
-            .map_err(|message| PapiError::Refused {
+            .map_err(|message| PieError::Refused {
                 provider: self.provider.clone(),
                 message,
             })
@@ -153,12 +153,12 @@ impl PapiClient {
     /// player, in which case player placeholders come back empty.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached or refuses.
+    /// Returns [`PieError`] if the provider cannot be reached or refuses.
     pub fn set_placeholders(
         &self,
         viewer: Option<&str>,
         text: &str,
-    ) -> Result<ResolvedLine, PapiError> {
+    ) -> Result<ResolvedLine, PieError> {
         let success = self.send(&Request::SetPlaceholders {
             text: truncate(text, MAX_TEXT_LENGTH)?,
             viewer: viewer
@@ -168,7 +168,7 @@ impl PapiClient {
         })?;
         match success {
             Success::Resolved(line) => Ok(line),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "set_placeholders",
             }),
@@ -181,11 +181,11 @@ impl PapiClient {
     /// call: one message per refresh instead of one per player.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached or refuses.
+    /// Returns [`PieError`] if the provider cannot be reached or refuses.
     pub fn set_placeholders_batch(
         &self,
         lines: &[(&str, &str)],
-    ) -> Result<Vec<ResolvedLine>, PapiError> {
+    ) -> Result<Vec<ResolvedLine>, PieError> {
         let requests = lines
             .iter()
             .map(|(viewer, text)| Line {
@@ -196,7 +196,7 @@ impl PapiClient {
         let success = self.send(&Request::SetPlaceholdersBatch { requests })?;
         match success {
             Success::ResolvedBatch { results } => Ok(results),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "set_placeholders_batch",
             }),
@@ -206,12 +206,12 @@ impl PapiClient {
     /// One placeholder's value, or [`None`] when it is not registered.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached or refuses.
+    /// Returns [`PieError`] if the provider cannot be reached or refuses.
     pub fn get_placeholder_value(
         &self,
         viewer: Option<&str>,
         id: &str,
-    ) -> Result<Option<String>, PapiError> {
+    ) -> Result<Option<String>, PieError> {
         let success = self.send(&Request::GetPlaceholderValue {
             id: truncate(id, MAX_ID_LENGTH)?,
             viewer: viewer
@@ -221,7 +221,7 @@ impl PapiClient {
         })?;
         match success {
             Success::Value { value, .. } => Ok(value),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "get_placeholder_value",
             }),
@@ -231,12 +231,12 @@ impl PapiClient {
     /// Every placeholder the provider knows, built in and contributed.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached or refuses.
-    pub fn get_registered_placeholders(&self) -> Result<Vec<RegisteredPlaceholder>, PapiError> {
+    /// Returns [`PieError`] if the provider cannot be reached or refuses.
+    pub fn get_registered_placeholders(&self) -> Result<Vec<RegisteredPlaceholder>, PieError> {
         let success = self.send(&Request::GetRegisteredPlaceholders)?;
         match success {
             Success::Registered { placeholders } => Ok(placeholders),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "get_registered_placeholders",
             }),
@@ -251,7 +251,7 @@ impl PapiClient {
     /// Java PlaceholderAPI's `Cacheable`.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached, refuses, or the
+    /// Returns [`PieError`] if the provider cannot be reached, refuses, or the
     /// namespace or a name is malformed or reserved. A namespace containing an
     /// underscore is malformed, because the namespace of `%a_b%` is everything
     /// before the first underscore.
@@ -260,7 +260,7 @@ impl PapiClient {
         namespace: &str,
         names: &[&str],
         cache: Cache,
-    ) -> Result<Registered, PapiError> {
+    ) -> Result<Registered, PieError> {
         let success = self.send(&Request::RegisterExpansion {
             namespace: truncate(namespace, MAX_ID_LENGTH)?,
             placeholders: names
@@ -278,7 +278,7 @@ impl PapiClient {
                 placeholders,
                 cache,
             }),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "register_expansion",
             }),
@@ -288,12 +288,12 @@ impl PapiClient {
     /// Gives up every namespace this plugin claimed.
     ///
     /// # Errors
-    /// Returns [`PapiError`] if the provider cannot be reached or refuses.
-    pub fn unregister_expansion(&self) -> Result<Vec<String>, PapiError> {
+    /// Returns [`PieError`] if the provider cannot be reached or refuses.
+    pub fn unregister_expansion(&self) -> Result<Vec<String>, PieError> {
         let success = self.send(&Request::UnregisterExpansion)?;
         match success {
             Success::Unregistered { namespaces } => Ok(namespaces),
-            _ => Err(PapiError::Mismatched {
+            _ => Err(PieError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "unregister_expansion",
             }),
@@ -301,9 +301,9 @@ impl PapiClient {
     }
 }
 
-fn truncate(value: &str, limit: usize) -> Result<String, PapiError> {
+fn truncate(value: &str, limit: usize) -> Result<String, PieError> {
     if value.len() > limit {
-        return Err(PapiError::Unencodable(ProtocolError::TooLong {
+        return Err(PieError::Unencodable(ProtocolError::TooLong {
             field: value.to_string(),
             limit,
         }));
@@ -320,7 +320,7 @@ fn truncate(value: &str, limit: usize) -> Result<String, PapiError> {
 ///
 /// The provider calls this **synchronously from inside its own IPC handler**, so
 /// do not call back into the provider from `resolve`. Reaching for a
-/// [`PapiClient`] there re-enters the provider while it is still inside the call
+/// [`PieClient`] there re-enters the provider while it is still inside the call
 /// that invoked you, and it will deadlock.
 ///
 /// # Errors

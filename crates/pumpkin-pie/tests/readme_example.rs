@@ -4,7 +4,7 @@
 //! If you change a signature in `client.rs`, this fails to build. That is the
 //! point: the README is the thing a plugin author copies.
 
-use pumpkin_papi::{Cache, IpcMessage, PapiClient, PapiError, PluginId, answer};
+use pumpkin_pie::{Cache, IpcMessage, PieClient, PieError, PluginId, answer};
 
 /// Stand-in for whatever a real expansion would look up.
 fn rank_of(viewer: Option<&str>) -> Option<String> {
@@ -21,8 +21,8 @@ fn rank_of(viewer: Option<&str>) -> Option<String> {
 pub struct Ranks;
 
 impl Ranks {
-    fn register(&self) -> Result<(), PapiError> {
-        PapiClient::new().register_expansion(
+    fn register(&self) -> Result<(), PieError> {
+        PieClient::new().register_expansion(
             "ranks",
             &["prefix", "suffix"],
             Cache::Ttl { ms: 5_000 },
@@ -43,8 +43,8 @@ impl Ranks {
     }
 }
 
-fn render() -> Result<(), PapiError> {
-    let papi = PapiClient::new();
+fn render() -> Result<(), PieError> {
+    let papi = PieClient::new();
 
     let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
     println!("{}   unresolved: {:?}", line.text, line.unresolved);

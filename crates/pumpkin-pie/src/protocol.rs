@@ -1,4 +1,4 @@
-//! The wire format for PumpkinPAPI's inter-plugin IPC.
+//! The wire format for PumpkinPIE's inter-plugin IPC.
 //!
 //! Every message is a UTF-8 JSON object. A request carries an `op`, a response
 //! carries `ok`, and a failed response also carries `error`. The operations are
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 pub const PROTOCOL_VERSION: u16 = 0;
 
 /// The provider's plugin name, which is also its IPC address.
-pub const PROVIDER: &str = "PumpkinPAPI";
+pub const PROVIDER: &str = "PumpkinPIE";
 
 /// Largest message accepted in either direction, in bytes.
 pub const MAX_MESSAGE_BYTES: usize = 1 << 20;
@@ -35,7 +35,7 @@ pub const MAX_BATCH_LINES: usize = 8192;
 pub const MAX_CACHE_TTL_MS: u64 = 60_000;
 
 /// Namespaces the provider answers itself, which an expansion cannot claim.
-pub const RESERVED_NAMESPACES: [&str; 3] = ["player", "server", "papi"];
+pub const RESERVED_NAMESPACES: [&str; 3] = ["player", "server", "pie"];
 
 /// Something a request asked for that cannot be honoured.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

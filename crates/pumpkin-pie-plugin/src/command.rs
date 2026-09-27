@@ -1,4 +1,4 @@
-//! The `/papi` command, for checking a config by hand.
+//! The `/pie` command, for checking a config by hand.
 
 use pumpkin_plugin_api::command::{
     Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
@@ -10,69 +10,69 @@ use pumpkin_plugin_api::text::{NamedColor, TextComponent};
 use pumpkin_plugin_api::{Context, Server};
 use tracing::warn;
 
-use pumpkin_papi::builtins;
+use pumpkin_pie::builtins;
 
 use crate::plugin;
 
-/// Permission required by `/papi`.
+/// Permission required by `/pie`.
 ///
 /// It has to be namespaced with the provider's exact plugin name, because
 /// `Context::register_permission` refuses any other namespace and a node that
 /// was never registered denies everyone, operators included.
-pub const USE_PERMISSION: &str = "PumpkinPAPI:use";
+pub const USE_PERMISSION: &str = "PumpkinPIE:use";
 
-/// The permission node `/papi` is gated on.
+/// The permission node `/pie` is gated on.
 #[must_use]
 pub const fn use_permission() -> &'static str {
     USE_PERMISSION
 }
 
-const USAGE: &str = "Usage: /papi parse <text> to resolve placeholders, \
-                     /papi expansions to list the registered expansions.";
+const USAGE: &str = "Usage: /pie parse <text> to resolve placeholders, \
+                     /pie expansions to list the registered expansions.";
 
 /// Most completions offered at once.
 const MAX_SUGGESTIONS: usize = 20;
 
-/// Registers `/papi` and the permission it needs.
+/// Registers `/pie` and the permission it needs.
 pub fn register(context: Context) {
     if let Err(error) = context.register_permission(&Permission {
         node: USE_PERMISSION.to_string(),
-        description: "Allows using /papi.".to_string(),
+        description: "Allows using /pie.".to_string(),
         default: PermissionDefault::Op(PermissionLevel::Two),
         children: Vec::new(),
     }) {
         // Swallowing this leaves the node unregistered, which denies the command
         // to everyone while looking exactly like the command not existing.
-        warn!("could not register {USE_PERMISSION}, /papi will be unusable: {error}");
+        warn!("could not register {USE_PERMISSION}, /pie will be unusable: {error}");
     }
 
     context.register_command(root(), USE_PERMISSION);
 }
 
 fn root() -> Command {
-    Command::new(&["papi".to_string()], "Resolve and inspect placeholders")
-        .execute(PapiCommand)
+    Command::new(&["pie".to_string()], "Resolve and inspect placeholders")
+        .execute(PieCommand)
         .then(
             CommandNode::literal("parse")
-                .execute(PapiCommand)
-                .suggest(PapiSuggestions)
+                .execute(PieCommand)
+                .suggest(PieSuggestions)
                 .then(
                     CommandNode::argument("text", &ArgumentType::String(StringType::Greedy))
-                        .execute(PapiCommand)
-                        .suggest(PapiSuggestions),
+                        .execute(PieCommand)
+                        .suggest(PieSuggestions),
                 ),
         )
         .then(
             CommandNode::literal("expansions")
-                .execute(PapiCommand)
-                .suggest(PapiSuggestions),
+                .execute(PieCommand)
+                .suggest(PieSuggestions),
         )
 }
 
-/// The single handler behind every `/papi` branch.
-struct PapiCommand;
+/// The single handler behind every `/pie` branch.
+struct PieCommand;
 
-impl CommandHandler for PapiCommand {
+impl CommandHandler for PieCommand {
     fn handle(
         &self,
         sender: CommandSender,
@@ -99,7 +99,7 @@ impl CommandHandler for PapiCommand {
     }
 }
 
-/// Bare `/papi`, or `/papi` with nothing to parse.
+/// Bare `/pie`, or `/pie` with nothing to parse.
 fn help(sender: &CommandSender) -> std::result::Result<i32, CommandError> {
     sender.send_message(TextComponent::text(USAGE));
     for builtin in builtins::BUILTINS {
@@ -115,9 +115,9 @@ fn help(sender: &CommandSender) -> std::result::Result<i32, CommandError> {
 }
 
 /// Offers `%placeholder%` completions for the token the cursor sits in.
-struct PapiSuggestions;
+struct PieSuggestions;
 
-impl CommandSuggestionHandler for PapiSuggestions {
+impl CommandSuggestionHandler for PieSuggestions {
     fn suggest(
         &self,
         _sender: CommandSender,
@@ -146,13 +146,13 @@ impl CommandSuggestionHandler for PapiSuggestions {
         }
     }
 }
-/// Both of these mistakes produced the same symptom in game: `/papi` reported
+/// Both of these mistakes produced the same symptom in game: `/pie` reported
 /// "Unknown command", which is what a client shows for a command the player may
 /// not use, and the log stayed clean.
 #[cfg(test)]
 mod tests {
     use super::USE_PERMISSION;
-    use pumpkin_papi::PROVIDER;
+    use pumpkin_pie::PROVIDER;
 
     #[test]
     fn the_permission_node_is_namespaced_with_the_plugin_name() {
@@ -172,7 +172,7 @@ mod tests {
     fn the_metadata_name_matches_the_permission_namespace() {
         // The check above only holds if the plugin's own name is what the node
         // is built from, so pin the pair together.
-        assert_eq!(PROVIDER, "PumpkinPAPI");
-        assert_eq!(USE_PERMISSION, "PumpkinPAPI:use");
+        assert_eq!(PROVIDER, "PumpkinPIE");
+        assert_eq!(USE_PERMISSION, "PumpkinPIE:use");
     }
 }

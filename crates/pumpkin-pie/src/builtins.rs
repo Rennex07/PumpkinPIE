@@ -24,7 +24,7 @@ pub struct ResolveContext<'a> {
 pub struct Builtin {
     /// The identifier between the percent signs.
     pub id: &'static str,
-    /// One line about what it is, shown by `/papi`.
+    /// One line about what it is, shown by `/pie`.
     pub description: &'static str,
     /// Computes the value, or [`None`] to leave the placeholder alone.
     pub resolve: fn(&ResolveContext<'_>) -> Option<String>,
@@ -43,7 +43,7 @@ fn number(value: f64, places: u32) -> String {
     }
 }
 
-/// Every built in placeholder, in the order `/papi` lists them.
+/// Every built in placeholder, in the order `/pie` lists them.
 pub static BUILTINS: &[Builtin] = &[
     Builtin {
         id: "player_name",
@@ -127,7 +127,7 @@ pub fn find(id: &str) -> Option<&'static Builtin> {
         .find(|builtin| builtin.id.eq_ignore_ascii_case(id))
 }
 
-/// How many built ins there are, for `/papi` and `ping`.
+/// How many built ins there are, for `/pie` and `ping`.
 #[must_use]
 pub const fn count() -> usize {
     BUILTINS.len()

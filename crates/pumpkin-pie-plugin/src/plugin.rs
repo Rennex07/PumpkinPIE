@@ -1,12 +1,12 @@
-//! The PumpkinPAPI provider plugin.
+//! The PumpkinPIE provider plugin.
 //!
 //! This crate is the Wasm component you drop into a server's `plugins/`
 //! directory. It owns the expansion registry, answers `set_placeholders`, caches
-//! what expansions allow it to, and exposes `/papi` for checking a config by hand.
+//! what expansions allow it to, and exposes `/pie` for checking a config by hand.
 //!
-//! The protocol, the token scanner and the client live in `pumpkin-papi`, which
+//! The protocol, the token scanner and the client live in `pumpkin-pie`, which
 //! is a plain library. They are split because every plugin exports a symbol
-//! called `init-plugin`, so a plugin that consumes PumpkinPAPI cannot also link
+//! called `init-plugin`, so a plugin that consumes PumpkinPIE cannot also link
 //! a crate that exports one.
 //!
 //! The `Plugin` trait hands every callback `&self`, and command handlers must be
@@ -19,13 +19,13 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use pumpkin_papi::builtins::{self, ResolveContext};
-use pumpkin_papi::expansion::{Expansion, Registry};
-use pumpkin_papi::protocol::{
+use pumpkin_pie::builtins::{self, ResolveContext};
+use pumpkin_pie::expansion::{Expansion, Registry};
+use pumpkin_pie::protocol::{
     MAX_BATCH_LINES, MAX_ID_LENGTH, MAX_TEXT_LENGTH, ProtocolError, RegisteredPlaceholder, Request,
     ResolvedLine, Response, Success, decode_request, encode,
 };
-use pumpkin_papi::{IpcMessage, PluginId};
+use pumpkin_pie::{IpcMessage, PluginId};
 use pumpkin_plugin_api::{
     Context, Player, Plugin, PluginMetadata, Result, Server, register_plugin,
 };
@@ -98,7 +98,7 @@ pub fn resolve_line(viewer_name: Option<&str>, text: &str) -> ResolvedLine {
     let viewer_key = viewer_name.unwrap_or_default().to_string();
     let budget = Cell::new(MAX_CALLBACKS_PER_LINE);
 
-    let result = pumpkin_papi::tokens::substitute(text, |id, argument| {
+    let result = pumpkin_pie::tokens::substitute(text, |id, argument| {
         resolve_one(viewer.as_ref(), &viewer_key, id, argument, &budget)
     });
     ResolvedLine {
@@ -193,7 +193,7 @@ pub fn registered() -> Vec<RegisteredPlaceholder> {
             id: builtin.id.to_string(),
             description: builtin.description.to_string(),
             namespace: namespace_of(builtin.id).to_string(),
-            source: pumpkin_papi::PROVIDER.to_string(),
+            source: pumpkin_pie::PROVIDER.to_string(),
         })
         .collect();
 
@@ -212,7 +212,7 @@ pub fn registered() -> Vec<RegisteredPlaceholder> {
     entries
 }
 
-/// One line per registered expansion, for `/papi`.
+/// One line per registered expansion, for `/pie`.
 pub fn expansion_summary() -> Vec<String> {
     lock(&state().registry)
         .all()
@@ -239,8 +239,8 @@ pub fn expansion_summary() -> Vec<String> {
 fn handle(sender: &str, request: Request) -> Response {
     match request {
         Request::Ping => Response::success(Success::Ping {
-            protocol: pumpkin_papi::PROTOCOL_VERSION,
-            name: pumpkin_papi::PROVIDER.to_string(),
+            protocol: pumpkin_pie::PROTOCOL_VERSION,
+            name: pumpkin_pie::PROVIDER.to_string(),
             version: VERSION.to_string(),
             placeholders: builtins::count(),
             expansions: lock(&state().registry).len(),
@@ -365,7 +365,7 @@ fn ask_expansion(source: &str, request: &Request) -> Option<String> {
             return None;
         }
     };
-    match pumpkin_papi::protocol::decode_response(&reply)
+    match pumpkin_pie::protocol::decode_response(&reply)
         .ok()?
         .into_success()
     {
@@ -382,16 +382,16 @@ fn ask_expansion(source: &str, request: &Request) -> Option<String> {
 }
 
 /// The provider plugin. Holds no state of its own; see [`state`].
-pub struct PumpkinPapi;
+pub struct PumpkinPie;
 
-impl Plugin for PumpkinPapi {
+impl Plugin for PumpkinPie {
     fn new() -> Self {
         Self
     }
 
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
-            name: pumpkin_papi::PROVIDER.to_string(),
+            name: pumpkin_pie::PROVIDER.to_string(),
             version: VERSION.to_string(),
             authors: vec!["Rennex".to_string()],
             description: "Placeholder provider that other Pumpkin plugins resolve through"
@@ -405,14 +405,14 @@ impl Plugin for PumpkinPapi {
         let _ = state().server.set(context.get_server());
         crate::command::register(context);
         info!(
-            "PumpkinPAPI {VERSION} ready with {} built in placeholders",
+            "PumpkinPIE {VERSION} ready with {} built in placeholders",
             builtins::count()
         );
         Ok(())
     }
 
     fn on_unload(&self, _context: Context) -> Result<()> {
-        info!("PumpkinPAPI unloaded");
+        info!("PumpkinPIE unloaded");
         Ok(())
     }
 
@@ -432,4 +432,4 @@ impl Plugin for PumpkinPapi {
     }
 }
 
-register_plugin!(PumpkinPapi);
+register_plugin!(PumpkinPie);
