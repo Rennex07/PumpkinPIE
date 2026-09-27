@@ -1,0 +1,23 @@
+[package]
+name = "pumpkin-pie-testexp"
+description = "A test expansion for PumpkinPIE: proves register_expansion and on_request work"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# A plugin is a Wasm component, not a native library.
+crate-type = ["cdylib"]
+
+[dependencies]
+# Depends on the library, never on `pumpkin-pie-plugin`. Both crates call
+# `register_plugin!`, which exports a symbol called `init-plugin`, so linking
+# both in is a duplicate-symbol error. Depending one-way means there is no
+# linker flag to set and no chance of silently keeping the provider's definition
+# instead of this plugin's own.
+pumpkin-pie = { path = "../pumpkin-pie" }
+pumpkin-plugin-api.workspace = true
+tracing.workspace = true

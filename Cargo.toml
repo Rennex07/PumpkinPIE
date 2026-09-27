@@ -1,0 +1,33 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-only"
+repository = "https://github.com/Rennex07/PumpkinPIE"
+authors = ["Rennex"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+pumpkin-plugin-api = "0.2.0"
+tracing = "0.1"
+
+# The published `pumpkin-plugin-api` is behind the server: its WIT no longer
+# matches, and a component built against it fails to load with
+# "type-checking export func `handle-event`". Until a release catches up, build
+# against a local checkout. Remove this once 0.1.0-dev tracks the current WIT.
+[patch.crates-io]
+pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
+
+# A plugin is a component, not a native library, so the size of the artifact is
+# the thing worth trading build speed for.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

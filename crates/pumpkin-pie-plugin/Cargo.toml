@@ -1,0 +1,22 @@
+[package]
+name = "pumpkin-pie-plugin"
+description = "The PumpkinPIE provider plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# A Wasm component, which is what Pumpkin loads. This is the only crate in the
+# workspace with a `cdylib`, because it is the only one that calls
+# `register_plugin!`, and every plugin exports an `init-plugin` symbol. Two
+# crates exporting it cannot be linked together, so a plugin that consumes
+# PumpkinPIE depends on `pumpkin-pie` alone and never on this.
+crate-type = ["cdylib"]
+
+[dependencies]
+pumpkin-pie = { path = "../pumpkin-pie" }
+pumpkin-plugin-api.workspace = true
+tracing.workspace = true

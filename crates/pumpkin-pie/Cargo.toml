@@ -1,0 +1,24 @@
+[package]
+name = "pumpkin-pie"
+description = "The Placeholder Integration Engine client for Pumpkin: a PlaceholderAPI style API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# A plugin is a `cdylib`, a dependency is an `rlib`. Cargo has no way to gate a
+# crate type on a feature, so the provider is built as its own crate under
+# `crates/pumpkin-pie-plugin`, which depends on this one for the client and
+# the protocol. That keeps the dependency direction one way and means a
+# consumer can never inherit this crate's `init-plugin` export.
+crate-type = ["rlib"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "2"
+pumpkin-plugin-api.workspace = true
+tracing.workspace = true

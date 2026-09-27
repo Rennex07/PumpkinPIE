@@ -1,0 +1,92 @@
+name: release
+
+# The provider has to be built against a `pumpkin-plugin-api` whose WIT matches
+# the server that will load it, and the published crate is behind the server. So
+# this workflow builds against a checkout of Pumpkin placed as a sibling of the
+# workspace, which is what the `[patch.crates-io]` in the root `Cargo.toml`
+# points at.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish as a release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # The Pumpkin revision whose `pumpkin-plugin-api` this was last verified
+  # against. Bump it deliberately: a component built against a different WIT
+  # fails to load with "type-checking export func `handle-event`", so this is
+  # the one input that decides whether a release works.
+  PUMPKIN_REPO: Pumpkin-MC/Pumpkin
+  PUMPKIN_REF: master
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cloned rather than checked out with `path:`, because that input nests the
+      # repository *inside* the workspace, and the `[patch.crates-io]` in the
+      # root `Cargo.toml` points at `../Pumpkin`, a sibling of the workspace.
+      - name: Clone the plugin API the component is built against
+        run: |
+          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
+          git clone --depth 1 --branch $env:PUMPKIN_REF "https://github.com/$env:PUMPKIN_REPO" $dest
+          "Cloned $env:PUMPKIN_REPO@$env:PUMPKIN_REF into $dest"
+          git -C $dest rev-parse HEAD
+
+      - name: Install the wasm32-wasip2 target
+        run: rustup target add wasm32-wasip2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: PumpkinPIE -> target
+
+      - name: Test
+        run: cargo test
+
+      - name: Build the provider and the test expansion
+        run: cargo build --release --target wasm32-wasip2
+
+      - name: Upload the two test plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: pumpkin-pie-test-plugins
+          path: |
+            target/wasm32-wasip2/release/pumpkin_pie_testexp.wasm
+            target/wasm32-wasip2/release/pumpkin_pie_consumer.wasm
+
+      # Recorded before the release body needs it, and from the same path the
+      # clone used rather than a relative `Pumpkin`, which is not in the
+      # workspace.
+      - name: Record the Pumpkin revision
+        id: pumpkin
+        run: |
+          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
+          "sha=$(git -C $dest rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+
+      # The component is attached bare rather than zipped. It is the only file
+      # that ships, and a server admin's next step is to drop it into a `plugins`
+      # folder, which is one click from a `.wasm` and two from a zip.
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
+          body: |
+            Download `pumpkin_pie_plugin.wasm` and drop it into your server's
+            `plugins` directory, alongside a server built from the Pumpkin
+            revision below.
+
+            Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
+            `${{ steps.pumpkin.outputs.sha }}`. A component built against a
+            different `pumpkin-plugin-api` WIT fails to load with
+            `type-checking export func handle-event`, so use a release matching
+            your server.
+          fail_on_unmatched_files: true
