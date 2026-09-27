@@ -31,12 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Sibling of the workspace, so `../Pumpkin` resolves.
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.PUMPKIN_REPO }}
-          ref: ${{ env.PUMPKIN_REF }}
-          path: Pumpkin
+      # Cloned rather than checked out with `path:`, because that input nests the
+      # repository *inside* the workspace, and the `[patch.crates-io]` in the
+      # root `Cargo.toml` points at `../Pumpkin`, a sibling of the workspace.
+      - name: Clone the plugin API the component is built against
+        run: |
+          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
+          git clone --depth 1 --branch $env:PUMPKIN_REF "https://github.com/$env:PUMPKIN_REPO" $dest
+          "Cloned $env:PUMPKIN_REPO@$env:PUMPKIN_REF into $dest"
+          git -C $dest rev-parse HEAD
 
       - name: Install the wasm32-wasip2 target
         run: rustup target add wasm32-wasip2
@@ -60,12 +63,14 @@ jobs:
       - name: Package the provider
         run: Compress-Archive -Path target\wasm32-wasip2\release\pumpkin_papi_plugin.wasm -DestinationPath pumpkin-papi-${{ inputs.tag || github.ref_name }}.zip
 
-      # Recorded before the release body needs it.
+      # Recorded before the release body needs it, and from the same path the
+      # clone used rather than a relative `Pumpkin`, which is not in the
+      # workspace.
       - name: Record the Pumpkin revision
         id: pumpkin
         run: |
-          git -C Pumpkin rev-parse HEAD | Out-File -FilePath pumpkin-sha.txt
-          "sha=$(git -C Pumpkin rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
+          "sha=$(git -C $dest rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
