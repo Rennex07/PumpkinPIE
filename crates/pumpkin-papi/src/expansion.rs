@@ -96,15 +96,23 @@ impl Registry {
             cleaned.insert(name);
         }
 
-        let expansion = self.expansions.entry(key.clone()).or_insert_with(|| Expansion {
-            namespace: key.clone(),
-            source: source.to_string(),
-            names: BTreeSet::new(),
-            cache: Cache::Never,
-        });
+        let expansion = self
+            .expansions
+            .entry(key.clone())
+            .or_insert_with(|| Expansion {
+                namespace: key.clone(),
+                source: source.to_string(),
+                names: BTreeSet::new(),
+                cache: Cache::Never,
+            });
         expansion.source = source.to_string();
         expansion.names = cleaned;
-        expansion.cache = Cache::Ttl { ms: cache.effective_ttl_ms() };
+        // Stored as the clamped TTL rather than the request, so `Cache::Never`
+        // would otherwise be indistinguishable from a TTL that clamped to zero.
+        expansion.cache = match cache.effective_ttl_ms() {
+            0 => Cache::Never,
+            ms => Cache::Ttl { ms },
+        };
 
         Ok(self.expansions.get(&key).expect("entry was just inserted"))
     }

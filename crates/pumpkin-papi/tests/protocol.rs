@@ -1,12 +1,12 @@
 //! Tests for the parts that are easy to break quietly: the token scanner, the
 //! JSON boundary, and the expansion table. None of it needs a server.
 
+use pumpkin_papi::Registry;
 use pumpkin_papi::protocol::{
     Cache, MAX_CACHE_TTL_MS, ProtocolError, Request, Response, Success, check_name,
     check_namespace, decode_request, decode_response, encode,
 };
 use pumpkin_papi::tokens::{find, substitute};
-use pumpkin_papi::Registry;
 
 /// A resolver over a fixed table, so a test can say what exists and what does not.
 fn resolve_all<'a>(
@@ -25,7 +25,10 @@ mod tokens {
 
     #[test]
     fn replaces_a_single_token() {
-        let out = substitute("hello %player_name%", resolve_all(&[("player_name", "Steve")]));
+        let out = substitute(
+            "hello %player_name%",
+            resolve_all(&[("player_name", "Steve")]),
+        );
         assert_eq!(out.text, "hello Steve");
         assert!(out.unresolved.is_empty());
     }
@@ -41,7 +44,10 @@ mod tokens {
 
     #[test]
     fn leaves_an_unresolved_token_exactly_as_written() {
-        let out = substitute("%known% %missing% %missing%", resolve_all(&[("known", "yes")]));
+        let out = substitute(
+            "%known% %missing% %missing%",
+            resolve_all(&[("known", "yes")]),
+        );
         assert_eq!(out.text, "yes %missing% %missing%");
         assert_eq!(out.unresolved, vec!["missing".to_string()]);
     }
@@ -49,13 +55,10 @@ mod tokens {
     #[test]
     fn a_repeated_token_is_only_resolved_once() {
         let mut asked = 0;
-        let out = substitute(
-            "%a% %a% %a%",
-            |_, _| {
-                asked += 1;
-                Some("x".to_string())
-            },
-        );
+        let out = substitute("%a% %a% %a%", |_, _| {
+            asked += 1;
+            Some("x".to_string())
+        });
         assert_eq!(out.text, "x x x");
         assert_eq!(asked, 1, "a repeated token should cost one lookup");
     }
@@ -85,13 +88,10 @@ mod tokens {
     #[test]
     fn an_argument_reaches_the_resolver() {
         let mut seen: Vec<Option<String>> = Vec::new();
-        let out = substitute(
-            "%player_has_permission:some.node%",
-            |_id, argument| {
-                seen.push(argument.map(str::to_string));
-                Some("true".to_string())
-            },
-        );
+        let out = substitute("%player_has_permission:some.node%", |_id, argument| {
+            seen.push(argument.map(str::to_string));
+            Some("true".to_string())
+        });
         assert_eq!(out.text, "true");
         assert_eq!(seen, vec![Some("some.node".to_string())]);
     }
@@ -107,7 +107,10 @@ mod tokens {
 
     #[test]
     fn multibyte_text_survives_a_scan() {
-        let out = substitute("héllo %player_name% wörld ☃", resolve_all(&[("player_name", "Steve")]));
+        let out = substitute(
+            "héllo %player_name% wörld ☃",
+            resolve_all(&[("player_name", "Steve")]),
+        );
         assert_eq!(out.text, "héllo Steve wörld ☃");
     }
 }
@@ -212,7 +215,10 @@ mod namespaces {
     #[test]
     fn a_malformed_namespace_is_refused() {
         for namespace in ["", "2ranks", "my-ranks", "My Ranks"] {
-            assert!(check_namespace(namespace).is_err(), "{namespace:?} should fail");
+            assert!(
+                check_namespace(namespace).is_err(),
+                "{namespace:?} should fail"
+            );
         }
     }
 
@@ -253,10 +259,20 @@ mod expansions {
     fn registering_again_replaces_the_names() {
         let mut registry = Registry::new();
         registry
-            .add("ranks", "Ranks", ["prefix".to_string(), "suffix".to_string()], Cache::Never)
+            .add(
+                "ranks",
+                "Ranks",
+                ["prefix".to_string(), "suffix".to_string()],
+                Cache::Never,
+            )
             .unwrap();
         let expansion = registry
-            .add("ranks", "Ranks", ["prefix".to_string()], Cache::Ttl { ms: 1_000 })
+            .add(
+                "ranks",
+                "Ranks",
+                ["prefix".to_string()],
+                Cache::Ttl { ms: 1_000 },
+            )
             .unwrap()
             .clone();
         assert_eq!(registry.len(), 1);
@@ -285,11 +301,20 @@ mod expansions {
     #[test]
     fn dropping_a_source_leaves_other_contributors_alone() {
         let mut registry = Registry::new();
-        registry.add("ranks", "Ranks", ["prefix".to_string()], Cache::Never).unwrap();
-        registry.add("quests", "Ranks", ["stage".to_string()], Cache::Never).unwrap();
-        registry.add("zones", "Zones", ["name".to_string()], Cache::Never).unwrap();
+        registry
+            .add("ranks", "Ranks", ["prefix".to_string()], Cache::Never)
+            .unwrap();
+        registry
+            .add("quests", "Ranks", ["stage".to_string()], Cache::Never)
+            .unwrap();
+        registry
+            .add("zones", "Zones", ["name".to_string()], Cache::Never)
+            .unwrap();
 
-        assert_eq!(registry.drop_source("Ranks"), vec!["quests".to_string(), "ranks".to_string()]);
+        assert_eq!(
+            registry.drop_source("Ranks"),
+            vec!["quests".to_string(), "ranks".to_string()]
+        );
         assert_eq!(registry.namespaces(), vec!["zones"]);
     }
 

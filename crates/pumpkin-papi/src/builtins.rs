@@ -122,7 +122,9 @@ pub static BUILTINS: &[Builtin] = &[
 /// Looks a built in up by id, ignoring case.
 #[must_use]
 pub fn find(id: &str) -> Option<&'static Builtin> {
-    BUILTINS.iter().find(|builtin| builtin.id.eq_ignore_ascii_case(id))
+    BUILTINS
+        .iter()
+        .find(|builtin| builtin.id.eq_ignore_ascii_case(id))
 }
 
 /// How many built ins there are, for `/papi` and `ping`.

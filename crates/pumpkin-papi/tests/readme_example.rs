@@ -4,15 +4,18 @@
 //! If you change a signature in `client.rs`, this fails to build. That is the
 //! point: the README is the thing a plugin author copies.
 
-use pumpkin_papi::{answer, Cache, IpcMessage, PluginId, PapiClient, PapiError};
+use pumpkin_papi::{Cache, IpcMessage, PapiClient, PapiError, PluginId, answer};
 
 /// Stand-in for whatever a real expansion would look up.
 fn rank_of(viewer: Option<&str>) -> Option<String> {
     let viewer = viewer?;
-    Some(match viewer {
-        "Steve" => "Admin",
-        _ => "Member",
-    }.to_string())
+    Some(
+        match viewer {
+            "Steve" => "Admin",
+            _ => "Member",
+        }
+        .to_string(),
+    )
 }
 
 pub struct Ranks;

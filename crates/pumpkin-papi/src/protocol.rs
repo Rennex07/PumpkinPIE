@@ -220,13 +220,21 @@ impl Response {
     /// A successful response.
     #[must_use]
     pub const fn success(success: Success) -> Self {
-        Self { ok: true, success: Some(success), error: None }
+        Self {
+            ok: true,
+            success: Some(success),
+            error: None,
+        }
     }
 
     /// A failed response.
     #[must_use]
     pub fn failure(message: impl Into<String>) -> Self {
-        Self { ok: false, success: None, error: Some(message.into()) }
+        Self {
+            ok: false,
+            success: None,
+            error: Some(message.into()),
+        }
     }
 
     /// Turns a [`ProtocolError`] into a failed response.
@@ -240,7 +248,8 @@ impl Response {
         if !self.ok {
             return Err(self.error.unwrap_or_else(|| "unknown error".to_string()));
         }
-        self.success.ok_or_else(|| "response carried no body".to_string())
+        self.success
+            .ok_or_else(|| "response carried no body".to_string())
     }
 }
 
@@ -272,15 +281,29 @@ pub fn decode_response(bytes: &[u8]) -> Result<Response, ProtocolError> {
 }
 
 /// Whether `namespace` may be claimed by an expansion.
+///
+/// An underscore is refused, because the namespace of `%a_b%` is everything
+/// before the **first** underscore, so a namespace containing one could never be
+/// reached. Worse, it would not look unreachable: `%my_plugin_rank%` would be
+/// forwarded to whoever owns `my`.
 pub fn check_namespace(namespace: &str) -> Result<&str, ProtocolError> {
     if namespace.is_empty() || namespace.starts_with(|c: char| c.is_ascii_digit()) {
-        return Err(ProtocolError::BadNamespace { namespace: namespace.to_string() });
+        return Err(ProtocolError::BadNamespace {
+            namespace: namespace.to_string(),
+        });
     }
-    if !namespace.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
-        return Err(ProtocolError::BadNamespace { namespace: namespace.to_string() });
+    if !namespace
+        .bytes()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+    {
+        return Err(ProtocolError::BadNamespace {
+            namespace: namespace.to_string(),
+        });
     }
     if RESERVED_NAMESPACES.contains(&namespace) {
-        return Err(ProtocolError::Reserved { namespace: namespace.to_string() });
+        return Err(ProtocolError::Reserved {
+            namespace: namespace.to_string(),
+        });
     }
     Ok(namespace)
 }
@@ -288,10 +311,17 @@ pub fn check_namespace(namespace: &str) -> Result<&str, ProtocolError> {
 /// Whether `name` is usable as the part of a placeholder id after the namespace.
 pub fn check_name(name: &str) -> Result<&str, ProtocolError> {
     if name.is_empty() {
-        return Err(ProtocolError::BadName { name: name.to_string() });
+        return Err(ProtocolError::BadName {
+            name: name.to_string(),
+        });
     }
-    if !name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
-        return Err(ProtocolError::BadName { name: name.to_string() });
+    if !name
+        .bytes()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+    {
+        return Err(ProtocolError::BadName {
+            name: name.to_string(),
+        });
     }
     Ok(name)
 }

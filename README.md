@@ -27,13 +27,24 @@ plugins add their own placeholders by registering an expansion.
 
 Early. Protocol version `0`, so the shape may still change.
 
-Verified in game on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**: the
-component loads, `/papi` registers, built ins resolve against a live player, and unknown
-placeholders stay literal. No other version has been tried, and there is no CI.
+Verified on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**, driving the server
+over its console so no client is needed. Both components load, `/papi` registers, built ins
+resolve, and unknown placeholders stay literal.
 
-Not yet exercised by anything: registering an expansion, answering an `on_request`, the cache
-TTL, and `set_placeholders_batch`. Those are covered by unit tests at the protocol level, but no
-second plugin has used them yet.
+The expansion path is verified too, by a second real plugin in `crates/pumpkin-papi-testexp`:
+
+| Check | Result |
+|:--|:--|
+| `register_expansion` on two namespaces | accepted, and the applied TTL comes back as asked |
+| `on_request` round trip | the expansion's answer reaches `/papi parse` |
+| `Cache::Never` | `%testexp_count%` re-asked the expansion on every resolve, incrementing each time |
+| `Cache::Ttl` | `%testexpcached_value%` asked 3 times, called back **once** |
+| Declining with `None` | `%testexp_nope%` stayed literal and was reported unresolved |
+| Case insensitivity | `%testexp_COUNT%` resolved, reaching the expansion as `name=count` |
+
+The last run was clean: no errors, no warnings from either plugin, no panics. No other Pumpkin
+version has been tried. `set_placeholders_batch` is covered by unit tests at the protocol level
+but has not been driven from a live plugin.
 
 ## Why
 
@@ -95,11 +106,25 @@ Rules worth knowing up front:
 
 ## Install
 
-**Requires a local Pumpkin checkout, for now.** The published `pumpkin-plugin-api` crate is
-behind the server's WIT, and a component built against it fails to load with
-`type-checking export func \`handle-event\``. Until a release catches up, this repository pins the
-crate to a path, so you need the sources next to it. There is no prebuilt component to download
-either, because there are no releases.
+### From a release
+
+Download `pumpkin-papi-<version>.zip` from the [releases page](https://github.com/Rennex07/PumpkinPAPI/releases)
+and unzip `pumpkin_papi_plugin.wasm` into your Pumpkin server's `plugins/` folder. That is the
+whole install. Start the server and you should see:
+
+```
+[INFO] PumpkinPAPI 0.1.0 ready with 11 built in placeholders
+```
+
+**Use a release built against your server.** A component is compiled against a specific
+`pumpkin-plugin-api` WIT, and one built against a different one fails to load with
+`type-checking export func \`handle-event\``. Each release says which Pumpkin revision it was built
+from in its notes.
+
+### From source
+
+Source builds need a local Pumpkin checkout, because the published `pumpkin-plugin-api` crate is
+behind the server's WIT and this repository pins the crate to a path.
 
 ```bash
 # 1. The plugin API the component is built against.
@@ -126,16 +151,12 @@ Then:
 
 ```bash
 rustup target add wasm32-wasip2
-cargo install cargo-component
-cargo component build --release --target wasm32-wasip2
+cargo build --release --target wasm32-wasip2
 ```
 
-Copy `target/wasm32-wasip2/release/pumpkin_papi.wasm` into your Pumpkin server's `plugins/`
-folder and start the server. You should see:
-
-```
-[INFO] PumpkinPAPI <version> ready with 11 built in placeholders
-```
+Copy `target/wasm32-wasip2/release/pumpkin_papi_plugin.wasm` into your Pumpkin server's `plugins/`
+folder. (`cargo component build` also works, but plain `cargo build` is enough: the crate is
+already a `cdylib` targeting `wasm32-wasip2`.)
 
 Then, in game, as an operator of level 2 or above:
 
@@ -225,6 +246,19 @@ at a time.
 
 ## Using it from a plugin
 
+The repository has two crates, and the split is not cosmetic:
+
+| Crate | You want it when |
+| --- | --- |
+| `pumpkin-papi` | You are writing a plugin that resolves placeholders, or one that provides them. A plain `rlib`. |
+| `pumpkin-papi-plugin` | You are building PumpkinPAPI itself. The `cdylib` you drop into `plugins/`. |
+
+**Depend on `pumpkin-papi` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so
+a plugin that links both crates fails to compile with `duplicate symbol: init-plugin`. There is no
+link-time workaround worth having: the linker keeps whichever definition it sees first, and you
+would silently ship a component that registers PumpkinPAPI's namespaces instead of your own. The
+split above removes the option by making the dependency one-directional.
+
 The crate is not on crates.io yet, so depend on it from git, and **add the same
 `[patch.crates-io]` to your own `Cargo.toml`** — a patch in this repository's workspace has no
 effect on yours:
@@ -278,8 +312,12 @@ This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin
 `PluginMetadata`, and `register_plugin!`.
 
 ```rust
-use pumpkin_plugin_api::{Context, IpcMessage, Plugin, PluginId, PluginMetadata, Result};
-use pumpkin_papi::{answer, Cache, PapiClient, PapiError};
+// `IpcMessage` and `PluginId` come from `pumpkin_papi`, not from
+// `pumpkin_plugin_api`: the API crate keeps its `wit` module private, so the
+// IPC types are not re-exported from there. `pumpkin_papi` re-exports them so
+// you need only two imports.
+use pumpkin_papi::{answer, Cache, IpcMessage, PapiClient, PapiError, PluginId};
+use pumpkin_plugin_api::{Context, Plugin, PluginMetadata, Result};
 
 pub struct Ranks;
 
@@ -321,7 +359,12 @@ impl Ranks {
     // `Cache::Ttl` lets the provider reuse your values instead of asking every
     // time. The provider clamps it, so a long TTL cannot serve stale ranks.
     fn register(&self) -> Result<(), PapiError> {
-        PapiClient::new().register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
+        let papi = PapiClient::new();
+        // Read the `Registered` it hands back rather than assuming you got what
+        // you asked for: the TTL you request is clamped to 60s, and the provider
+        // reports what it actually applied.
+        let applied = papi.register_expansion("ranks", &["prefix", "suffix"], Cache::Ttl { ms: 5_000 })?;
+        log::info!("ranks registered: {:?}", applied.cache);
         Ok(())
     }
 }
@@ -334,7 +377,7 @@ fn rank_of(viewer: Option<&str>) -> Option<String> {
 register_plugin!(Ranks);
 ```
 
-Three things about that signature are easy to get wrong:
+Four things about that signature are easy to get wrong:
 
 - `handle_ipc_message` returns `std::result::Result`, not `Result`. `pumpkin_plugin_api` exports
   its own `Result` alias, so with it in scope the prelude's `Result` is shadowed and the trait
@@ -342,6 +385,9 @@ Three things about that signature are easy to get wrong:
 - `answer` returns `Result<Vec<u8>, ProtocolError>`, so the `map_err` is what turns it into the
   `String`-errored result the trait wants.
 - `register_plugin!` is a macro from `pumpkin_plugin_api`, not from this crate.
+- A namespace may not contain an `_`. The namespace of `%a_b%` is everything before the **first**
+  underscore, so a namespace containing one could never be reached — and it would not look
+  unreachable, because `%my_plugin_rank%` would quietly be forwarded to whoever owns `my`.
 
 `ctx` is borrowed data only, and `viewer` is a player **name**, not a handle:
 
@@ -349,12 +395,20 @@ Three things about that signature are easy to get wrong:
 |:--|:--|:--|
 | `namespace` | `&str` | lowercased |
 | `id` | `&str` | the full id as written in the text, so its case is preserved |
-| `name` | `&str` | the part after the first `_` |
+| `name` | `&str` | the part after the first `_`, **lowercased** |
 | `viewer` | `Option<&str>` | player name, not a `Player` |
 | `argument` | `Option<&str>` | the text after the first `:` |
 
+`name` is lowercased to match how names are registered, so `%ranks_PREFIX%` arrives as `prefix` and
+a `match` arm for the name you registered will hit. `id` keeps the case it was written with, which
+is what you want for echoing a placeholder back to a player.
+
 There is no `Server` or `Player` reachable from inside the closure, so capture whatever else you
 need when you build it. Return `None` to decline, and the placeholder stays in the text.
+
+**Do not call back into the provider from inside `resolve`.** The provider asks you synchronously,
+from inside its own IPC handler, so reaching for a `PapiClient` there re-enters it while it is
+still inside the call that invoked you, and the server deadlocks.
 
 List `dependencies = ["PumpkinPAPI"]` in your metadata so you are only loaded once the provider
 is ready to answer.
@@ -533,14 +587,23 @@ observations about the build in front of you rather than promises.
 
 ```bash
 cargo test
-cargo clippy --all-targets
+cargo clippy --target wasm32-wasip2 --all-targets
 cargo build --release --target wasm32-wasip2
 ```
 
-The tests cover the parts that are easy to break quietly: the token scanner, the JSON boundary,
-and the expansion table. They need no Minecraft client and no server, so they are the fast
-feedback loop. What they cannot check is what a real client sees, which is the one command in
+The tests cover the parts that are easy to break quietly: the token scanner, the JSON boundary, and
+the expansion table. They need no Minecraft client and no server, so they are the fast feedback
+loop. What they cannot check is what a real client sees, which is the one command in
 [Install](#install).
+
+Two things are worth knowing before you build:
+
+- **`pumpkin-plugin-api` is patched to a local path.** The root `Cargo.toml` points
+  `[patch.crates-io]` at `../Pumpkin`, because the published crate's WIT is behind the server and a
+  component built against it fails to load. You need a Pumpkin checkout as a sibling directory, or
+  you need to change that line. This is the reason a release build is worth having.
+- **Building the whole workspace builds both plugins**, and they cannot be linked together, which
+  is the point of the crate split rather than a problem with it.
 
 ### Layout
 
@@ -552,10 +615,17 @@ feedback loop. What they cannot check is what a real client sees, which is the o
 | `crates/pumpkin-papi/src/expansion.rs` | Expansions and namespaces |
 | `crates/pumpkin-papi/src/builtins.rs` | The built in placeholder table |
 | `crates/pumpkin-papi/src/client.rs` | The consumer side, and `answer` for expansion authors |
-| `crates/pumpkin-papi/src/command.rs` | `/papi` |
-| `crates/pumpkin-papi/src/plugin.rs` | The provider's IPC surface and cache |
 | `crates/pumpkin-papi/tests/protocol.rs` | Token, protocol and registry tests |
-| `crates/pumpkin-papi/tests/registration.rs` | Pins the permission node to the plugin name |
+| `crates/pumpkin-papi/tests/readme_example.rs` | Compiles the example above, so the docs cannot rot |
+| `crates/pumpkin-papi-plugin/src/lib.rs` | The provider crate's entry point |
+| `crates/pumpkin-papi-plugin/src/plugin.rs` | The provider's IPC surface and cache |
+| `crates/pumpkin-papi-plugin/src/command.rs` | `/papi`, and the test pinning its permission node |
+| `crates/pumpkin-papi-testexp/src/lib.rs` | A second, real plugin that registers and answers |
+
+`crates/pumpkin-papi-testexp` is not decoration. It is the proof that a *different* plugin can
+link `pumpkin-papi` and be answered by the provider, which is the whole point of the crate split;
+it builds in the same workspace as the provider with no linker flags, and its `TESTEXP-ON-REQUEST`
+log lines are how the cache behaviour was verified on a live server.
 
 ## Contributing
 

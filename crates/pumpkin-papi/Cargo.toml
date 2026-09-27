@@ -9,9 +9,12 @@ repository.workspace = true
 authors.workspace = true
 
 [lib]
-# `rlib` so other plugins can depend on the client without pulling in the
-# plugin entry point, `cdylib` so the provider itself loads as a Wasm component.
-crate-type = ["rlib", "cdylib"]
+# A plugin is a `cdylib`, a dependency is an `rlib`. Cargo has no way to gate a
+# crate type on a feature, so the provider is built as its own crate under
+# `crates/pumpkin-papi-plugin`, which depends on this one for the client and
+# the protocol. That keeps the dependency direction one way and means a
+# consumer can never inherit this crate's `init-plugin` export.
+crate-type = ["rlib"]
 
 [dependencies]
 serde.workspace = true

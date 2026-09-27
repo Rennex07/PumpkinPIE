@@ -160,5 +160,8 @@ pub fn substitute(
         }
     }
 
-    Substituted { text: out, unresolved }
+    Substituted {
+        text: out,
+        unresolved,
+    }
 }

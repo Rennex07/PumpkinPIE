@@ -1,10 +1,16 @@
-//! The provider plugin.
+//! The PumpkinPAPI provider plugin.
 //!
-//! Owns the expansion registry, answers `set_placeholders`, caches what
-//! expansions allow it to, and exposes `/papi` for checking a config by hand.
+//! This crate is the Wasm component you drop into a server's `plugins/`
+//! directory. It owns the expansion registry, answers `set_placeholders`, caches
+//! what expansions allow it to, and exposes `/papi` for checking a config by hand.
 //!
-//! The `Plugin` trait hands every callback `&self`, and command handlers must
-//! be `'static`, so the state lives in a [`OnceLock`] rather than on the plugin
+//! The protocol, the token scanner and the client live in `pumpkin-papi`, which
+//! is a plain library. They are split because every plugin exports a symbol
+//! called `init-plugin`, so a plugin that consumes PumpkinPAPI cannot also link
+//! a crate that exports one.
+//!
+//! The `Plugin` trait hands every callback `&self`, and command handlers must be
+//! `'static`, so the state lives in a [`OnceLock`] rather than on the plugin
 //! value. Nothing here holds a lock across a host call, because the host may
 //! deliver an IPC callback back into this plugin before the call returns.
 
@@ -13,18 +19,17 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
+use pumpkin_papi::builtins::{self, ResolveContext};
+use pumpkin_papi::expansion::{Expansion, Registry};
+use pumpkin_papi::protocol::{
+    MAX_BATCH_LINES, MAX_ID_LENGTH, MAX_TEXT_LENGTH, ProtocolError, RegisteredPlaceholder, Request,
+    ResolvedLine, Response, Success, decode_request, encode,
+};
+use pumpkin_papi::{IpcMessage, PluginId};
 use pumpkin_plugin_api::{
     Context, Player, Plugin, PluginMetadata, Result, Server, register_plugin,
 };
 use tracing::{info, warn};
-
-use crate::builtins::{self, ResolveContext};
-use crate::expansion::{Expansion, Registry};
-use crate::protocol::{
-    MAX_BATCH_LINES, MAX_ID_LENGTH, MAX_TEXT_LENGTH, ProtocolError, RegisteredPlaceholder, Request,
-    ResolvedLine, Response, Success, decode_request, encode,
-};
-use crate::{IpcMessage, PluginId};
 
 /// Version reported by `ping`.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -70,14 +75,16 @@ fn state() -> &'static State {
 
 /// A poisoned lock is a bug, not a reason to stop resolving placeholders.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The server handle `on_load` was given.
 ///
 /// # Panics
 /// Panics if called before `on_load`.
-pub(crate) fn server() -> &'static Server {
+pub fn server() -> &'static Server {
     state()
         .server
         .get()
@@ -91,13 +98,16 @@ pub fn resolve_line(viewer_name: Option<&str>, text: &str) -> ResolvedLine {
     let viewer_key = viewer_name.unwrap_or_default().to_string();
     let budget = Cell::new(MAX_CALLBACKS_PER_LINE);
 
-    let result = crate::tokens::substitute(text, |id, argument| {
+    let result = pumpkin_papi::tokens::substitute(text, |id, argument| {
         resolve_one(viewer.as_ref(), &viewer_key, id, argument, &budget)
     });
-    ResolvedLine { text: result.text, unresolved: result.unresolved }
+    ResolvedLine {
+        text: result.text,
+        unresolved: result.unresolved,
+    }
 }
 
-/// Resolves a single placeholder, or [`None`] to leave it alone.
+/// Resolves a single placeholder, or `None` to leave it alone.
 fn resolve_one(
     viewer: Option<&Player>,
     viewer_key: &str,
@@ -108,7 +118,11 @@ fn resolve_one(
     let server = server();
 
     if let Some(builtin) = builtins::find(id) {
-        let context = ResolveContext { server, viewer, argument };
+        let context = ResolveContext {
+            server,
+            viewer,
+            argument,
+        };
         return (builtin.resolve)(&context);
     }
 
@@ -128,7 +142,11 @@ fn resolve_one(
     let request = Request::OnRequest {
         namespace: namespace.to_string(),
         id: id.to_string(),
-        name: name.to_string(),
+        // Lowercased to match how `Registry::add` stores names. Sending it as
+        // written meant `%myexp_COUNT%` reached the expansion as `COUNT`, which
+        // no `match` arm for the registered `count` would ever hit, so the
+        // placeholder silently stayed in the text.
+        name: name.to_ascii_lowercase(),
         viewer: viewer.map(|player| player.get_name()),
         argument: argument.map(str::to_string),
     };
@@ -158,7 +176,13 @@ fn store(expansion: &Expansion, key: CacheKey, value: Option<String>) {
     lock(&state().cache)
         .entry(expansion.source.clone())
         .or_default()
-        .insert(key, Cached { value, stored: Instant::now() });
+        .insert(
+            key,
+            Cached {
+                value,
+                stored: Instant::now(),
+            },
+        );
 }
 
 /// Every placeholder the provider knows, built in and contributed.
@@ -169,7 +193,7 @@ pub fn registered() -> Vec<RegisteredPlaceholder> {
             id: builtin.id.to_string(),
             description: builtin.description.to_string(),
             namespace: namespace_of(builtin.id).to_string(),
-            source: crate::protocol::PROVIDER.to_string(),
+            source: pumpkin_papi::PROVIDER.to_string(),
         })
         .collect();
 
@@ -196,9 +220,17 @@ pub fn expansion_summary() -> Vec<String> {
             let names = if expansion.names.is_empty() {
                 "answers anything".to_string()
             } else {
-                expansion.names.iter().cloned().collect::<Vec<_>>().join(", ")
+                expansion
+                    .names
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
             };
-            format!("%{}%  from {}: {names}", expansion.namespace, expansion.source)
+            format!(
+                "%{}%  from {}: {names}",
+                expansion.namespace, expansion.source
+            )
         })
         .collect()
 }
@@ -207,20 +239,26 @@ pub fn expansion_summary() -> Vec<String> {
 fn handle(sender: &str, request: Request) -> Response {
     match request {
         Request::Ping => Response::success(Success::Ping {
-            protocol: crate::protocol::PROTOCOL_VERSION,
-            name: crate::protocol::PROVIDER.to_string(),
+            protocol: pumpkin_papi::PROTOCOL_VERSION,
+            name: pumpkin_papi::PROVIDER.to_string(),
             version: VERSION.to_string(),
             placeholders: builtins::count(),
             expansions: lock(&state().registry).len(),
         }),
-        Request::GetRegisteredPlaceholders => {
-            Response::success(Success::Registered { placeholders: registered() })
-        }
-        Request::RegisterExpansion { namespace, placeholders, cache } => {
+        Request::GetRegisteredPlaceholders => Response::success(Success::Registered {
+            placeholders: registered(),
+        }),
+        Request::RegisterExpansion {
+            namespace,
+            placeholders,
+            cache,
+        } => {
             forget(sender);
             let claimed = {
                 let mut registry = lock(&state().registry);
-                registry.add(&namespace, sender, placeholders, cache).cloned()
+                registry
+                    .add(&namespace, sender, placeholders, cache)
+                    .cloned()
             };
             match claimed {
                 Ok(expansion) => Response::success(Success::RegisteredExpansion {
@@ -256,7 +294,11 @@ fn handle(sender: &str, request: Request) -> Response {
                 .collect();
             Response::success(Success::ResolvedBatch { results })
         }
-        Request::GetPlaceholderValue { id, viewer, argument } => {
+        Request::GetPlaceholderValue {
+            id,
+            viewer,
+            argument,
+        } => {
             if id.len() > MAX_ID_LENGTH {
                 return Response::from_error(ProtocolError::TooLong {
                     field: "id".to_string(),
@@ -275,15 +317,17 @@ fn handle(sender: &str, request: Request) -> Response {
                 argument.as_deref(),
                 &budget,
             ) {
-                Some(value) => {
-                    Response::success(Success::Value { known: true, value: Some(value) })
-                }
-                None => Response::success(Success::Value { known: false, value: None }),
+                Some(value) => Response::success(Success::Value {
+                    known: true,
+                    value: Some(value),
+                }),
+                None => Response::success(Success::Value {
+                    known: false,
+                    value: None,
+                }),
             }
         }
-        Request::OnRequest { .. } => {
-            Response::failure("the provider does not provide expansions")
-        }
+        Request::OnRequest { .. } => Response::failure("the provider does not provide expansions"),
     }
 }
 
@@ -294,7 +338,10 @@ fn namespace_of(id: &str) -> &str {
 
 fn check_text(text: &str) -> Result<(), ProtocolError> {
     if text.len() > MAX_TEXT_LENGTH {
-        return Err(ProtocolError::TooLong { field: "text".to_string(), limit: MAX_TEXT_LENGTH });
+        return Err(ProtocolError::TooLong {
+            field: "text".to_string(),
+            limit: MAX_TEXT_LENGTH,
+        });
     }
     Ok(())
 }
@@ -318,7 +365,10 @@ fn ask_expansion(source: &str, request: &Request) -> Option<String> {
             return None;
         }
     };
-    match crate::protocol::decode_response(&reply).ok()?.into_success() {
+    match pumpkin_papi::protocol::decode_response(&reply)
+        .ok()?
+        .into_success()
+    {
         Ok(Success::OnRequest { value }) => value,
         Ok(_) => {
             warn!("{source} answered an on_request with the wrong response");
@@ -341,7 +391,7 @@ impl Plugin for PumpkinPapi {
 
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
-            name: crate::protocol::PROVIDER.to_string(),
+            name: pumpkin_papi::PROVIDER.to_string(),
             version: VERSION.to_string(),
             authors: vec!["Rennex".to_string()],
             description: "Placeholder provider that other Pumpkin plugins resolve through"
@@ -354,8 +404,10 @@ impl Plugin for PumpkinPapi {
     fn on_load(&self, context: Context) -> Result<()> {
         let _ = state().server.set(context.get_server());
         crate::command::register(context);
-        let count = builtins::count();
-        info!("PumpkinPAPI {VERSION} ready with {count} built in placeholders");
+        info!(
+            "PumpkinPAPI {VERSION} ready with {} built in placeholders",
+            builtins::count()
+        );
         Ok(())
     }
 

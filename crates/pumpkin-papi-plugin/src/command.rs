@@ -10,7 +10,8 @@ use pumpkin_plugin_api::text::{NamedColor, TextComponent};
 use pumpkin_plugin_api::{Context, Server};
 use tracing::warn;
 
-use crate::builtins;
+use pumpkin_papi::builtins;
+
 use crate::plugin;
 
 /// Permission required by `/papi`.
@@ -18,19 +19,19 @@ use crate::plugin;
 /// It has to be namespaced with the provider's exact plugin name, because
 /// `Context::register_permission` refuses any other namespace and a node that
 /// was never registered denies everyone, operators included.
-const USE_PERMISSION: &str = "PumpkinPAPI:use";
+pub const USE_PERMISSION: &str = "PumpkinPAPI:use";
+
+/// The permission node `/papi` is gated on.
+#[must_use]
+pub const fn use_permission() -> &'static str {
+    USE_PERMISSION
+}
 
 const USAGE: &str = "Usage: /papi parse <text> to resolve placeholders, \
                      /papi expansions to list the registered expansions.";
 
 /// Most completions offered at once.
 const MAX_SUGGESTIONS: usize = 20;
-
-/// The permission node `/papi` is gated on, exposed for tests and docs.
-#[must_use]
-pub const fn use_permission() -> &'static str {
-    USE_PERMISSION
-}
 
 /// Registers `/papi` and the permission it needs.
 pub fn register(context: Context) {
@@ -61,7 +62,11 @@ fn root() -> Command {
                         .suggest(PapiSuggestions),
                 ),
         )
-        .then(CommandNode::literal("expansions").execute(PapiCommand).suggest(PapiSuggestions))
+        .then(
+            CommandNode::literal("expansions")
+                .execute(PapiCommand)
+                .suggest(PapiSuggestions),
+        )
 }
 
 /// The single handler behind every `/papi` branch.
@@ -87,10 +92,7 @@ impl CommandHandler for PapiCommand {
         sender.send_message(TextComponent::text(&line.text));
 
         if !line.unresolved.is_empty() {
-            let note = TextComponent::text(&format!(
-                "unresolved: {}",
-                line.unresolved.join(", ")
-            ));
+            let note = TextComponent::text(&format!("unresolved: {}", line.unresolved.join(", ")));
             sender.send_error(note.color_named(NamedColor::Red));
         }
         Ok(i32::try_from(line.unresolved.len()).unwrap_or(i32::MAX))
@@ -137,6 +139,40 @@ impl CommandSuggestionHandler for PapiSuggestions {
             })
             .collect();
 
-        CommandSuggestions { start: start as u32, length: prefix.len() as u32, values }
+        CommandSuggestions {
+            start: start as u32,
+            length: prefix.len() as u32,
+            values,
+        }
+    }
+}
+/// Both of these mistakes produced the same symptom in game: `/papi` reported
+/// "Unknown command", which is what a client shows for a command the player may
+/// not use, and the log stayed clean.
+#[cfg(test)]
+mod tests {
+    use super::USE_PERMISSION;
+    use pumpkin_papi::PROVIDER;
+
+    #[test]
+    fn the_permission_node_is_namespaced_with_the_plugin_name() {
+        // `Context::register_permission` rejects a node that does not start with
+        // `{plugin name}:`, compared case sensitively.
+        assert!(
+            USE_PERMISSION.starts_with(&format!("{PROVIDER}:")),
+            "{USE_PERMISSION:?} must start with {PROVIDER:?}: or register_permission refuses it"
+        );
+        assert!(
+            USE_PERMISSION.len() > PROVIDER.len() + 1,
+            "{USE_PERMISSION:?} needs a key after the colon"
+        );
+    }
+
+    #[test]
+    fn the_metadata_name_matches_the_permission_namespace() {
+        // The check above only holds if the plugin's own name is what the node
+        // is built from, so pin the pair together.
+        assert_eq!(PROVIDER, "PumpkinPAPI");
+        assert_eq!(USE_PERMISSION, "PumpkinPAPI:use");
     }
 }

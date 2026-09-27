@@ -48,7 +48,10 @@ pub enum PapiError {
     Malformed { provider: String, message: String },
     /// The provider answered, but not with the operation that was asked for.
     #[error("{provider} answered {operation} with the wrong response")]
-    Mismatched { provider: String, operation: &'static str },
+    Mismatched {
+        provider: String,
+        operation: &'static str,
+    },
     /// The request could not be encoded, so it was never sent.
     #[error("request could not be encoded: {0}")]
     Unencodable(#[source] ProtocolError),
@@ -67,6 +70,18 @@ pub struct RequestContext<'a> {
     pub viewer: Option<&'a str>,
     /// The token's argument, if it carried one.
     pub argument: Option<&'a str>,
+}
+
+/// What `register_expansion` actually applied, after the provider clamped the
+/// TTL it was asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Registered {
+    /// The names the provider now advertises for the namespace, lowercased.
+    pub placeholders: Vec<String>,
+    /// The cache the provider is actually applying, which may be shorter than
+    /// the one requested. Read this rather than assuming you got what you asked
+    /// for: asking for an hour comes back as `Ttl { ms: 60_000 }`.
+    pub cache: Cache,
 }
 
 /// Talks to one PumpkinPAPI provider over Pumpkin's inter-plugin IPC.
@@ -93,7 +108,9 @@ impl PapiClient {
     /// A client for a provider registered under a different name.
     #[must_use]
     pub fn with_provider(provider: impl Into<String>) -> Self {
-        Self { provider: provider.into() }
+        Self {
+            provider: provider.into(),
+        }
     }
 
     /// The plugin name this client sends to.
@@ -102,22 +119,32 @@ impl PapiClient {
         &self.provider
     }
 
-    fn send(&self, request: &Request) -> Result<Success, PapiError> {        let bytes = encode(request).map_err(PapiError::Unencodable)?;
+    fn send(&self, request: &Request) -> Result<Success, PapiError> {
+        let bytes = encode(request).map_err(PapiError::Unencodable)?;
         let reply = match pumpkin_plugin_api::ipc::send_ipc_message(&self.provider, &bytes) {
             Ok(Ok(reply)) => reply,
             Ok(Err(message)) => {
-                return Err(PapiError::Refused { provider: self.provider.clone(), message });
+                return Err(PapiError::Refused {
+                    provider: self.provider.clone(),
+                    message,
+                });
             }
-            Err(()) => return Err(PapiError::Unreachable { provider: self.provider.clone() }),
+            Err(()) => {
+                return Err(PapiError::Unreachable {
+                    provider: self.provider.clone(),
+                });
+            }
         };
         let response: Response = decode_response(&reply).map_err(|error| PapiError::Malformed {
             provider: self.provider.clone(),
             message: error.to_string(),
         })?;
-        response.into_success().map_err(|message| PapiError::Refused {
-            provider: self.provider.clone(),
-            message,
-        })
+        response
+            .into_success()
+            .map_err(|message| PapiError::Refused {
+                provider: self.provider.clone(),
+                message,
+            })
     }
 
     /// Resolves every placeholder in `text`.
@@ -132,13 +159,13 @@ impl PapiClient {
         viewer: Option<&str>,
         text: &str,
     ) -> Result<ResolvedLine, PapiError> {
-        let success = self.send(
-            &Request::SetPlaceholders {
-                text: truncate(text, MAX_TEXT_LENGTH)?,
-                viewer: viewer.map(|name| truncate(name, MAX_ID_LENGTH)).transpose()?,
-                argument: None,
-            },
-        )?;
+        let success = self.send(&Request::SetPlaceholders {
+            text: truncate(text, MAX_TEXT_LENGTH)?,
+            viewer: viewer
+                .map(|name| truncate(name, MAX_ID_LENGTH))
+                .transpose()?,
+            argument: None,
+        })?;
         match success {
             Success::Resolved(line) => Ok(line),
             _ => Err(PapiError::Mismatched {
@@ -185,13 +212,13 @@ impl PapiClient {
         viewer: Option<&str>,
         id: &str,
     ) -> Result<Option<String>, PapiError> {
-        let success = self.send(
-            &Request::GetPlaceholderValue {
-                id: truncate(id, MAX_ID_LENGTH)?,
-                viewer: viewer.map(|name| truncate(name, MAX_ID_LENGTH)).transpose()?,
-                argument: None,
-            },
-        )?;
+        let success = self.send(&Request::GetPlaceholderValue {
+            id: truncate(id, MAX_ID_LENGTH)?,
+            viewer: viewer
+                .map(|name| truncate(name, MAX_ID_LENGTH))
+                .transpose()?,
+            argument: None,
+        })?;
         match success {
             Success::Value { value, .. } => Ok(value),
             _ => Err(PapiError::Mismatched {
@@ -206,9 +233,7 @@ impl PapiClient {
     /// # Errors
     /// Returns [`PapiError`] if the provider cannot be reached or refuses.
     pub fn get_registered_placeholders(&self) -> Result<Vec<RegisteredPlaceholder>, PapiError> {
-        let success = self.send(
-            &Request::GetRegisteredPlaceholders,
-        )?;
+        let success = self.send(&Request::GetRegisteredPlaceholders)?;
         match success {
             Success::Registered { placeholders } => Ok(placeholders),
             _ => Err(PapiError::Mismatched {
@@ -227,13 +252,15 @@ impl PapiClient {
     ///
     /// # Errors
     /// Returns [`PapiError`] if the provider cannot be reached, refuses, or the
-    /// namespace or a name is malformed or reserved.
+    /// namespace or a name is malformed or reserved. A namespace containing an
+    /// underscore is malformed, because the namespace of `%a_b%` is everything
+    /// before the first underscore.
     pub fn register_expansion(
         &self,
         namespace: &str,
         names: &[&str],
         cache: Cache,
-    ) -> Result<Vec<String>, PapiError> {
+    ) -> Result<Registered, PapiError> {
         let success = self.send(&Request::RegisterExpansion {
             namespace: truncate(namespace, MAX_ID_LENGTH)?,
             placeholders: names
@@ -243,7 +270,14 @@ impl PapiClient {
             cache,
         })?;
         match success {
-            Success::RegisteredExpansion { placeholders, .. } => Ok(placeholders),
+            Success::RegisteredExpansion {
+                placeholders,
+                cache,
+                ..
+            } => Ok(Registered {
+                placeholders,
+                cache,
+            }),
             _ => Err(PapiError::Mismatched {
                 provider: self.provider.clone(),
                 operation: "register_expansion",
@@ -284,6 +318,11 @@ fn truncate(value: &str, limit: usize) -> Result<String, PapiError> {
 /// text. Anything that is not an `on_request` message is answered as a refusal
 /// so a misrouted message is visible rather than silent.
 ///
+/// The provider calls this **synchronously from inside its own IPC handler**, so
+/// do not call back into the provider from `resolve`. Reaching for a
+/// [`PapiClient`] there re-enters the provider while it is still inside the call
+/// that invoked you, and it will deadlock.
+///
 /// # Errors
 /// Returns [`ProtocolError`] if the message cannot be read or the reply cannot
 /// be encoded.
@@ -292,7 +331,13 @@ pub fn answer(
     resolve: impl FnOnce(RequestContext<'_>) -> Option<String>,
 ) -> Result<Vec<u8>, ProtocolError> {
     let reply = match decode_request(message) {
-        Ok(Request::OnRequest { namespace, id, name, viewer, argument }) => {
+        Ok(Request::OnRequest {
+            namespace,
+            id,
+            name,
+            viewer,
+            argument,
+        }) => {
             let value = resolve(RequestContext {
                 namespace: &namespace,
                 id: &id,
@@ -306,7 +351,10 @@ pub fn answer(
             let op = serde_json::to_value(other)
                 .ok()
                 .and_then(|value| {
-                    value.get("op").and_then(|op| op.as_str()).map(str::to_string)
+                    value
+                        .get("op")
+                        .and_then(|op| op.as_str())
+                        .map(str::to_string)
                 })
                 .unwrap_or_else(|| "an unnamed operation".to_string());
             Response::failure(format!("unknown op '{op}'"))

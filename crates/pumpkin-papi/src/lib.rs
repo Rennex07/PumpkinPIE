@@ -43,15 +43,12 @@
 
 pub mod builtins;
 pub mod client;
-pub mod command;
 pub mod expansion;
-pub mod plugin;
 pub mod protocol;
 pub mod tokens;
 
-pub use client::{PapiClient, PapiError, RequestContext, answer};
+pub use client::{PapiClient, PapiError, Registered, RequestContext, answer};
 pub use expansion::{Expansion, Registry};
-pub use plugin::PumpkinPapi;
 pub use protocol::{Cache, Line, PROTOCOL_VERSION, PROVIDER, Request, Response, Success};
 pub use tokens::{Substituted, Token};
 
