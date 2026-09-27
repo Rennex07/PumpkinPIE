@@ -16,6 +16,8 @@ serde_json = "1"
 pumpkin-plugin-api = "0.1.0-dev"
 tracing = "0.1"
 
+# A plugin is a component, not a native library, so the size of the artifact is
+# the thing worth trading build speed for.
 [profile.release]
 opt-level = "z"
 lto = true

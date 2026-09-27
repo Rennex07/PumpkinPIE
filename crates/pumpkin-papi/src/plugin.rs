@@ -354,10 +354,8 @@ impl Plugin for PumpkinPapi {
     fn on_load(&self, context: Context) -> Result<()> {
         let _ = state().server.set(context.get_server());
         crate::command::register(context);
-        info!(
-            "PumpkinPAPI {VERSION} ready with {} built in placeholders",
-            builtins::count()
-        );
+        let count = builtins::count();
+        info!("PumpkinPAPI {VERSION} ready with {count} built in placeholders");
         Ok(())
     }
 

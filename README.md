@@ -88,7 +88,7 @@ Copy `target/wasm32-wasip2/release/pumpkin_papi.wasm` into your Pumpkin server's
 folder and start the server. You should see:
 
 ```
-[INFO] PumpkinPAPI 0.1.0 ready with 17 built in placeholders
+[INFO] PumpkinPAPI 0.1.0 ready with 16 built in placeholders
 ```
 
 Then, in game, as an operator:
@@ -120,7 +120,6 @@ failing, so the same text works globally and per player.
 | `%player_has_permission:NODE%` | `true` | Takes an argument, see below |
 | `%server_online%` | `5` | |
 | `%server_max_players%` | `20` | |
-| `%papi_version%` | `0.1.0` | |
 
 The list is deliberately short, and it is the part of this project most likely to upset someone.
 A placeholder earns a place here only when it is **vanilla state a third party has no better
