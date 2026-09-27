@@ -212,6 +212,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-papi-consumer"
+version = "0.1.0"
+dependencies = [
+ "pumpkin-papi",
+ "pumpkin-plugin-api",
+ "tracing",
+]
+
+[[package]]
 name = "pumpkin-papi-plugin"
 version = "0.1.0"
 dependencies = [

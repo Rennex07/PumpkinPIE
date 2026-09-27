@@ -28,23 +28,41 @@ plugins add their own placeholders by registering an expansion.
 Early. Protocol version `0`, so the shape may still change.
 
 Verified on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**, driving the server
-over its console so no client is needed. Both components load, `/papi` registers, built ins
-resolve, and unknown placeholders stay literal.
+over its console so no client is needed. Three components load together: the provider, an
+expansion, and a consumer.
 
-The expansion path is verified too, by a second real plugin in `crates/pumpkin-papi-testexp`:
+The expansion path, via `crates/pumpkin-papi-testexp`:
 
 | Check | Result |
 |:--|:--|
 | `register_expansion` on two namespaces | accepted, and the applied TTL comes back as asked |
 | `on_request` round trip | the expansion's answer reaches `/papi parse` |
 | `Cache::Never` | `%testexp_count%` re-asked the expansion on every resolve, incrementing each time |
-| `Cache::Ttl` | `%testexpcached_value%` asked 3 times, called back **once** |
+| `Cache::Ttl` | asked 3 times, called back **once** |
 | Declining with `None` | `%testexp_nope%` stayed literal and was reported unresolved |
 | Case insensitivity | `%testexp_COUNT%` resolved, reaching the expansion as `name=count` |
 
-The last run was clean: no errors, no warnings from either plugin, no panics. No other Pumpkin
-version has been tried. `set_placeholders_batch` is covered by unit tests at the protocol level
-but has not been driven from a live plugin.
+The consumer path, via `crates/pumpkin-papi-consumer` and its `/papicheck`, which is the direction
+a tab list or scoreboard plugin actually uses:
+
+| Check | Result |
+|:--|:--|
+| `set_placeholders` | resolved a built in and an expansion, left `%nope_nope%` literal, reported it unresolved |
+| `set_placeholders` with no viewer | `%server_online%` resolved, player placeholders stayed empty |
+| `set_placeholders_batch` | 3 lines in one message, all resolved, in order |
+| `get_placeholder_value` | a built in and an expansion returned values; an unknown id returned `None`, not an error |
+| `get_registered_placeholders` | 15 entries across `player`, `server`, `testexp`, `testexpcached` |
+| `unregister_expansion` from a plugin that registered nothing | returned empty and left the other plugin's namespaces intact |
+
+The cache survives the IPC boundary, which is the part that only a real consumer can show: three
+identical consumer runs asked for `%testexpcached_value%` 3 times and got **1** callback, while
+`Cache::Never` placeholders got one callback per request.
+
+Last run was clean: no errors, no warnings from any of the three plugins, no panics. The published
+`v0.1.0` artifact was downloaded and loaded to confirm the release itself works.
+
+Still unverified: no real Minecraft client this round, so the player built-ins were exercised with
+a name that is not online. No other Pumpkin version has been tried.
 
 ## Why
 
@@ -295,6 +313,9 @@ fn render() -> Result<(), PapiError> {
 Every call returns `Result<_, PapiError>`. `PapiError::Unreachable` is the one to expect on a
 first run: it means the provider plugin is not installed, is named differently, or your plugin
 messaged itself. Pumpkin reports all three the same way, so check the server log first.
+
+`crates/pumpkin-papi-consumer` is a working plugin that does all of this, so you can read a real
+one rather than a fragment. Its `/papicheck` command runs each call and logs what came back.
 
 Refreshing a tab list or a scoreboard for every player, which is what batching exists for:
 
@@ -620,12 +641,15 @@ Two things are worth knowing before you build:
 | `crates/pumpkin-papi-plugin/src/lib.rs` | The provider crate's entry point |
 | `crates/pumpkin-papi-plugin/src/plugin.rs` | The provider's IPC surface and cache |
 | `crates/pumpkin-papi-plugin/src/command.rs` | `/papi`, and the test pinning its permission node |
-| `crates/pumpkin-papi-testexp/src/lib.rs` | A second, real plugin that registers and answers |
+| `crates/pumpkin-papi-testexp/src/lib.rs` | An expansion: registers namespaces and answers |
+| `crates/pumpkin-papi-consumer/src/lib.rs` | A consumer: calls the client API and logs what came back |
 
-`crates/pumpkin-papi-testexp` is not decoration. It is the proof that a *different* plugin can
-link `pumpkin-papi` and be answered by the provider, which is the whole point of the crate split;
-it builds in the same workspace as the provider with no linker flags, and its `TESTEXP-ON-REQUEST`
-log lines are how the cache behaviour was verified on a live server.
+The two extra plugins are not decoration. They are the proof that a *different* plugin can link
+`pumpkin-papi` and be answered by the provider, which is the whole point of the crate split. They
+build in the same workspace with no linker flags, and their `TESTEXP-ON-REQUEST` and
+`CONSUMER-CHECK` log lines are how the provider and consumer paths were each verified on a live
+server. `testexp` pushes values towards the provider; `consumer` pulls them back out, which is
+the direction a real scoreboard or tab list plugin uses.
 
 ## Contributing
 

@@ -1,0 +1,21 @@
+[package]
+name = "pumpkin-papi-consumer"
+description = "A consumer of PumpkinPAPI: proves the client API works from a separate plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# A plugin is a Wasm component, not a native library.
+crate-type = ["cdylib"]
+
+[dependencies]
+# The library only, never `pumpkin-papi-plugin`. Both crates call
+# `register_plugin!`, which exports a symbol called `init-plugin`, so linking
+# both in is a duplicate-symbol error.
+pumpkin-papi = { path = "../pumpkin-papi" }
+pumpkin-plugin-api.workspace = true
+tracing.workspace = true
