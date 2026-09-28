@@ -84,7 +84,7 @@ impl Plugin for PieConsumer {
 
 fn command() -> Command {
     Command::new(
-        &["papicheck".to_string()],
+        &["piecheck".to_string()],
         "Run the PumpkinPIE client API checks",
     )
     .execute(CheckCommand)
@@ -100,7 +100,7 @@ impl CommandHandler for CheckCommand {
         _server: Server,
         _args: ConsumedArgs,
     ) -> std::result::Result<i32, CommandError> {
-        let papi = PieClient::new();
+        let pie = PieClient::new();
         let mut failures = 0;
 
         // The console has no player, so a name is used to exercise the
@@ -114,7 +114,7 @@ impl CommandHandler for CheckCommand {
         // A mix of a built in, a registered expansion, and a placeholder nobody
         // provides.
         let mixed = "%server_max_players% %testexp_greeting% %nope_nope%";
-        match papi.set_placeholders(Some(&viewer), mixed) {
+        match pie.set_placeholders(Some(&viewer), mixed) {
             Ok(line) => {
                 info!(
                     "{LOG_PREFIX} set_placeholders sent={mixed:?} text={:?} unresolved={:?}",
@@ -130,7 +130,7 @@ impl CommandHandler for CheckCommand {
 
         // The same call with no viewer, which is the shape a plugin uses for
         // server-wide text.
-        match papi.set_placeholders(None, "%server_online% online") {
+        match pie.set_placeholders(None, "%server_online% online") {
             Ok(line) => {
                 info!(
                     "{LOG_PREFIX} set_placeholders_no_viewer text={:?}",
@@ -151,7 +151,7 @@ impl CommandHandler for CheckCommand {
             (viewer.as_str(), "%testexp_count%"),
             (viewer.as_str(), "%testexpcached_value%"),
         ];
-        match papi.set_placeholders_batch(&lines) {
+        match pie.set_placeholders_batch(&lines) {
             Ok(results) => {
                 if results.len() != lines.len() {
                     failures += 1;
@@ -175,7 +175,7 @@ impl CommandHandler for CheckCommand {
         // One value three ways: a built in, a registered expansion, and
         // something nobody claims, which has to be `None` rather than an error.
         for id in ["server_max_players", "testexp_greeting", "nope_nope"] {
-            match papi.get_placeholder_value(Some(&viewer), id) {
+            match pie.get_placeholder_value(Some(&viewer), id) {
                 Ok(value) => {
                     info!("{LOG_PREFIX} get_placeholder_value id={id} value={value:?}");
                     report(&sender, id, value.as_deref().unwrap_or("<none>"));
@@ -188,7 +188,7 @@ impl CommandHandler for CheckCommand {
         }
 
         // The full list, which is how a plugin discovers what it can use.
-        match papi.get_registered_placeholders() {
+        match pie.get_registered_placeholders() {
             Ok(entries) => {
                 let mut namespaces: Vec<&str> = entries
                     .iter()
@@ -214,7 +214,7 @@ impl CommandHandler for CheckCommand {
 
         // A plugin that registered nothing must not be able to unregister
         // somebody else's namespaces.
-        match papi.unregister_expansion() {
+        match pie.unregister_expansion() {
             Ok(namespaces) => {
                 info!("{LOG_PREFIX} unregister returned {namespaces:?}, expected empty");
                 if !namespaces.is_empty() {

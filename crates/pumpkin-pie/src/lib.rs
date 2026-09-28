@@ -18,8 +18,8 @@
 //! ```no_run
 //! use pumpkin_pie::PieClient;
 //!
-//! let papi = PieClient::new();
-//! let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%").unwrap();
+//! let pie = PieClient::new();
+//! let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%").unwrap();
 //! println!("{}", line.text);
 //! ```
 //!

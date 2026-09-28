@@ -44,16 +44,16 @@ impl Ranks {
 }
 
 fn render() -> Result<(), PieError> {
-    let papi = PieClient::new();
+    let pie = PieClient::new();
 
-    let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
+    let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")?;
     println!("{}   unresolved: {:?}", line.text, line.unresolved);
 
-    let online = papi.get_placeholder_value(None, "server_online")?;
-    let all = papi.get_registered_placeholders()?;
+    let online = pie.get_placeholder_value(None, "server_online")?;
+    let all = pie.get_registered_placeholders()?;
 
     let lines = [("Steve", "%player_ping%ms"), ("Alex", "%player_ping%ms")];
-    let results = papi.set_placeholders_batch(&lines)?;
+    let results = pie.set_placeholders_batch(&lines)?;
 
     let ranks = Ranks;
     ranks.register()?;

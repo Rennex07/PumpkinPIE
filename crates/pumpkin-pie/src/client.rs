@@ -6,8 +6,8 @@
 //! use pumpkin_pie::{PieClient, PieError};
 //!
 //! # fn render() -> Result<(), PieError> {
-//! let papi = PieClient::new();
-//! let line = papi.set_placeholders(Some("Steve"), "%player_ping%ms")?;
+//! let pie = PieClient::new();
+//! let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms")?;
 //! # let _ = line.text;
 //! # Ok(())
 //! # }

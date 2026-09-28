@@ -83,11 +83,11 @@ pub struct TestExp;
 impl TestExp {
     /// Claims both namespaces, refusing to start if either is refused.
     fn register(&self) -> std::result::Result<(), PieError> {
-        let papi = PieClient::new();
+        let pie = PieClient::new();
 
         let uncached =
-            papi.register_expansion("testexp", &["greeting", "count", "cached"], Cache::Never)?;
-        let cached = papi.register_expansion(
+            pie.register_expansion("testexp", &["greeting", "count", "cached"], Cache::Never)?;
+        let cached = pie.register_expansion(
             "testexpcached",
             &["value"],
             Cache::Ttl { ms: CACHED_TTL_MS },
