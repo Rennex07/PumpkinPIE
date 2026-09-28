@@ -18,12 +18,22 @@ permissions:
   contents: write
 
 env:
-  # The Pumpkin revision whose `pumpkin-plugin-api` this was last verified
-  # against. Bump it deliberately: a component built against a different WIT
-  # fails to load with "type-checking export func `handle-event`", so this is
-  # the one input that decides whether a release works.
+  # The Pumpkin revision whose `pumpkin-plugin-api` this is built against.
+  #
+  # This is a release TAG, not `master`, and that matters. The marketplace
+  # serves the published release, so the component has to be built against the
+  # WIT in that release. Upstream `master` has a different WIT — commit
+  # 5746077df (#3568) added an AI event to `event.wit` — and a component built
+  # against it fails to load on the release with a bare
+  # `type-checking export func 'handle-event'` and no explanation.
+  #
+  # `nightly` shares the release's WIT, so this build also covers nightly.
+  # Verified by loading it in the official `pumpkin-X64-Windows.exe` from this
+  # tag: provider loads, all IPC checks pass.
+  #
+  # Bump it when a new Pumpkin release ships, and re-verify before publishing.
   PUMPKIN_REPO: Pumpkin-MC/Pumpkin
-  PUMPKIN_REF: master
+  PUMPKIN_REF: 0.2.0+26.3-26.51
 
 jobs:
   build:
@@ -81,12 +91,17 @@ jobs:
           files: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
           body: |
             Download `pumpkin_pie_plugin.wasm` and drop it into your server's
-            `plugins` directory, alongside a server built from the Pumpkin
-            revision below.
+            `plugins` directory.
 
             Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
-            `${{ steps.pumpkin.outputs.sha }}`. A component built against a
-            different `pumpkin-plugin-api` WIT fails to load with
-            `type-checking export func handle-event`, so use a release matching
-            your server.
+            `${{ steps.pumpkin.outputs.sha }}`. Verified by loading it in the
+            official Windows binary from that tag.
+
+            **Compatibility is not by version number.** Pumpkin kept the
+            `0.2.0+26.3-26.51` version string while changing its plugin WIT, so
+            a server and this component can both claim the same version and
+            still disagree. A mismatch shows as
+            `type-checking export func 'handle-event'` and nothing else. If you
+            see that, you are on a server built from a different Pumpkin commit
+            than the one above.
           fail_on_unmatched_files: true
