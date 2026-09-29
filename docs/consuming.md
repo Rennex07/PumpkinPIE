@@ -3,6 +3,13 @@
 For a plugin that shows placeholders — a tab list, a scoreboard, a chat formatter. If you want to
 *provide* placeholders instead, see [expansions.md](expansions.md).
 
+**This page covers resolving text, not displaying it.** PumpkinPIE turns `%player_ping%` into `42`;
+putting that on a scoreboard, in a tab list or in chat is Pumpkin's own client-facing API. The
+`scoreboard` interface in
+[pumpkin-plugin-wit](https://github.com/Pumpkin-MC/Pumpkin/tree/master/crates/pumpkin-plugin-wit)
+is where `add-objective`, `set-display-slot` and `add-score` live, and that is where the resolved
+string goes. Nothing below covers it.
+
 ## Setup
 
 Add the client crate, which is `pumpkin-pie` — the plain `rlib`, not `pumpkin-pie-plugin`:

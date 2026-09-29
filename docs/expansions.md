@@ -6,6 +6,17 @@ you only want to show placeholders, see [consuming.md](consuming.md).
 This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin`, a
 `PluginMetadata`, and `register_plugin!`.
 
+## Getting it onto a scoreboard
+
+This crate resolves text; it does not put that text anywhere. If you are building a scoreboard or
+tab list, the client-facing half is Pumpkin's own API, not this one — the `scoreboard` interface in
+[pumpkin-plugin-wit](https://github.com/Pumpkin-MC/Pumpkin/tree/master/crates/pumpkin-plugin-wit)
+covers `add-objective`, `set-display-slot`, `add-score` and the rest, and those are what you call
+with the resolved text. PumpkinPIE hands you the string; that interface decides where it goes.
+
+So the shape of a consumer is two halves: `set_placeholders` to turn `%player_ping%` into `42`, and
+the WIT to display it. Neither half knows about the other.
+
 Three rules to pick a namespace by: it may not contain an underscore, it may not begin with a
 digit, and it may not be `player`, `server` or `pie` — the provider answers those itself and will
 refuse to hand them over. Breaking any of them is an `Err` from `register_expansion`, not a silent
