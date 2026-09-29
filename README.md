@@ -147,9 +147,13 @@ A placeholder can take one argument, written after a colon:
 %player_has_permission:PumpkinPIE:use%
 ```
 
-An argument may contain letters, digits and `_ . - : /`. The argument is **only reachable through
-`set_placeholders`**, by writing it in the text: `get_placeholder_value` takes an id and no
-argument, so asking it for `player_has_permission` always reports `known: false`.
+An argument may contain letters, digits and `_ . - : /`. The usual way to pass one is by writing it
+in the text for `set_placeholders`.
+
+The Rust `get_placeholder_value` cannot: it takes an id and has no argument parameter, so asking it
+for `player_has_permission` always reports `known: false`. That is a limitation of the client, not
+of the protocol — the wire format carries an `argument` field, which
+[docs/protocol.md](docs/protocol.md#get_placeholder_value) documents.
 
 ## Commands
 

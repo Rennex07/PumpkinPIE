@@ -34,7 +34,6 @@ Two things worth knowing before you build:
 | `crates/pumpkin-pie/src/builtins.rs` | The built in placeholder table |
 | `crates/pumpkin-pie/src/client.rs` | The consumer side, and `answer` for expansion authors |
 | `crates/pumpkin-pie/tests/protocol.rs` | Token, protocol and registry tests |
-| `crates/pumpkin-pie/tests/docs_example.rs` | Compiles the examples in `docs/`, so they cannot rot |
 | `crates/pumpkin-pie-plugin/src/lib.rs` | The provider crate's entry point |
 | `crates/pumpkin-pie-plugin/src/plugin.rs` | The provider's IPC surface and cache |
 | `crates/pumpkin-pie-plugin/src/command.rs` | `/pie`, and the test pinning its permission node |
@@ -50,9 +49,17 @@ direction a real scoreboard or tab list plugin uses.
 
 ### Documentation
 
-The prose lives in `README.md` and `docs/`, and the code examples in `docs/` are compiled by
-`tests/docs_example.rs`. If you change a signature in `client.rs`, that test fails to build — which
-is the point, because those examples are what a plugin author copies.
+The prose lives in `README.md` and `docs/`. The code examples there are **verified by hand** — copied
+into a scratch crate and built against `wasm32-wasip2` — not by a test.
+
+There was a `tests/docs_example.rs` that claimed to do this automatically. It could not: a test is
+an `rlib`, the example is a `cdylib` exporting `init-plugin`, and a test cannot export that symbol
+without colliding. So the test held a hand-rewritten variant with no `Plugin` impl and no
+`register_plugin!`, which proved the *signatures* still existed and nothing about the code a plugin
+author copies. That was worse than no test, because it was cited as a guarantee it did not provide.
+
+**If you change a signature in `client.rs`, rebuild the examples by hand.** `cargo test` will not
+catch a stale one.
 
 ## What would help
 
