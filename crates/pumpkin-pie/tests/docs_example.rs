@@ -1,8 +1,8 @@
-//! Compiles the expansion example from the README, so the documentation cannot
-//! drift away from the API without a test failing.
+//! Compiles the examples in `docs/consuming.md` and `docs/expansions.md`, so the
+//! documentation cannot drift away from the API without a test failing.
 //!
 //! If you change a signature in `client.rs`, this fails to build. That is the
-//! point: the README is the thing a plugin author copies.
+//! point: those examples are what a plugin author copies.
 
 use pumpkin_pie::{Cache, IpcMessage, PieClient, PieError, PluginId, answer};
 
@@ -64,7 +64,7 @@ fn render() -> Result<(), PieError> {
 }
 
 #[test]
-fn the_readme_example_typechecks() {
+fn the_documentation_examples_typecheck() {
     // Nothing to run: this exists so the signatures above must be real.
     let _ = render;
 }

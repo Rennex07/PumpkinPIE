@@ -150,7 +150,9 @@ impl PieClient {
     /// Resolves every placeholder in `text`.
     ///
     /// `viewer` is a player name or uuid, or [`None`] to render without a
-    /// player, in which case player placeholders come back empty.
+    /// player. A player placeholder resolved without a viewer is left in the
+    /// text as written and listed in [`ResolvedLine::unresolved`], exactly
+    /// like an unknown placeholder.
     ///
     /// # Errors
     /// Returns [`PieError`] if the provider cannot be reached or refuses.
