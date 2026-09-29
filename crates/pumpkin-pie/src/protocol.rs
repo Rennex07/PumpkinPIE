@@ -84,8 +84,8 @@ impl Cache {
 /// One line of text to resolve, and who it is for.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
-    /// Player name or uuid the placeholders are resolved for, or [`None`] to
-    /// resolve without a player.
+    /// Player name the placeholders are resolved for, or [`None`] to
+    /// resolve without a player. The provider looks players up by name only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer: Option<String>,
     /// The text, with `%placeholder%` tokens in it.

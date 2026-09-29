@@ -4,29 +4,50 @@ For a plugin that shows placeholders — a tab list, a scoreboard, a chat format
 *provide* placeholders instead, see [expansions.md](expansions.md).
 
 **This page covers resolving text, not displaying it.** PumpkinPIE turns `%player_ping%` into `42`;
-putting that on a scoreboard, in a tab list or in chat is Pumpkin's own client-facing API. The
-`scoreboard` interface in
-[pumpkin-plugin-wit](https://github.com/Pumpkin-MC/Pumpkin/tree/master/crates/pumpkin-plugin-wit)
-is where `add-objective`, `set-display-slot` and `add-score` live, and that is where the resolved
-string goes. Nothing below covers it.
+putting that on a scoreboard, in a tab list or in chat is Pumpkin's own client-facing API. Start at
+[`scoreboard.wit`](https://github.com/Pumpkin-MC/Pumpkin/blob/master/crates/pumpkin-plugin-wit/v0.1/scoreboard.wit),
+which is where `add-objective`, `set-display-slot` and `add-score` live, and where the resolved
+string goes. You will also need `player.wit` for the per-player handles those calls hang off. None
+of that is covered here.
 
 ## Setup
 
-Add the client crate, which is `pumpkin-pie` — the plain `rlib`, not `pumpkin-pie-plugin`:
+Your crate needs all of this, not just the first line — a plugin that is missing any of it either
+fails to compile or, worse, builds a library the server silently ignores:
 
 ```toml
+[lib]
+# Without this you get an rlib, no .wasm, and a plugin folder the server skips
+# with nothing in the log. This is the most common way a plugin fails to load.
+crate-type = ["cdylib"]
+
 [dependencies]
 pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
+# Not transitive: `impl Plugin`, `Context` and `register_command` come from here,
+# so a plugin cannot use them without declaring it. Match your Pumpkin release.
+pumpkin-plugin-api = "0.2.0"
+tracing = "0.1"
 
+# Keep [patch.crates-io] last - TOML tables are order-sensitive, and a dependency
+# written below it becomes a patch entry rather than a dependency.
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 ```
 
-Two things about that snippet.
+Then build it, and drop the artifact in your server's `plugins/`:
+
+```bash
+rustup target add wasm32-wasip2
+cargo build --release --target wasm32-wasip2
+# -> target/wasm32-wasip2/release/<your-crate-name>.wasm
+```
+
+Two things about that.
 
 **The `[patch.crates-io]` must be in *your* `Cargo.toml`.** A patch declared in this repository's
 workspace has no effect on yours. The path is the `../Pumpkin` checkout from
-[Install](../README.md#from-source); adjust it to wherever yours lives.
+[Install](../README.md#from-source); adjust it to wherever yours lives. If you installed PumpkinPIE
+from a release you do not have one, so clone Pumpkin.
 
 **Do not also depend on `pumpkin-pie-plugin`.** Every Pumpkin plugin exports a symbol called
 `init-plugin`, so linking both crates fails to compile with `duplicate symbol: init-plugin`. The
@@ -34,6 +55,26 @@ reason there is no workaround worth having is in
 [design.md](design.md#why-two-crates).
 
 ## The API
+
+Inside a `Plugin` method — which is where this code ends up — the `?` needs spelling out. The
+trait's `Result` carries a `String` and there is no `From<PieError>` for one:
+
+```rust
+use pumpkin_pie::PieClient;
+use pumpkin_plugin_api::{Context, Plugin, PluginMetadata, Result};
+use tracing::info;
+
+fn on_load(&self, _context: Context) -> Result<()> {
+    let pie = PieClient::new();
+    let line = pie
+        .set_placeholders(Some("Steve"), "%player_ping%ms %ranks_prefix%")
+        .map_err(|e| e.to_string())?;              // <-- not a bare `?`
+    info!("{}   unresolved: {:?}", line.text, line.unresolved);
+    Ok(())
+}
+```
+
+The same calls from a free function, where `?` works normally:
 
 ```rust
 use pumpkin_pie::{PieClient, PieError};
@@ -50,14 +91,24 @@ fn render() -> Result<(), PieError> {
 }
 ```
 
+`crates/pumpkin-pie-consumer` is a complete working consumer, including the `Plugin` impl and the
+`register_plugin!` call, if you would rather read a whole one.
+
 `PieClient` holds no state, so keep one around for the life of your plugin.
 
 | Call | Gives you |
 | :-- | :-- |
 | `set_placeholders(viewer, text)` | One line resolved, plus the ids that stayed in it |
 | `set_placeholders_batch(lines)` | The same, for many players in one message |
-| `get_placeholder_value(viewer, id)` | One value, or `None` if the id is not registered |
+| `get_placeholder_value(viewer, id)` | One value, or `None` if it is not registered |
 | `get_registered_placeholders()` | Every id the provider knows, built in and contributed |
+
+The `viewer` is a player **name**, not a handle, and it has to be online — the provider looks
+players up by name only, so a uuid resolves nothing. The name is also what the provider hands an
+expansion, which is all it ever gets to work with.
+
+If your provider is registered under a different name than `PumpkinPIE`, use
+`PieClient::with_provider("...")` rather than the default `PieClient::new()`.
 
 `crates/pumpkin-pie-consumer` is a working plugin that does all of this, so you can read a real one
 rather than a fragment. Its `/piecheck` command runs each call and logs what came back.

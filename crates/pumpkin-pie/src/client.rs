@@ -149,10 +149,11 @@ impl PieClient {
 
     /// Resolves every placeholder in `text`.
     ///
-    /// `viewer` is a player name or uuid, or [`None`] to render without a
-    /// player. A player placeholder resolved without a viewer is left in the
-    /// text as written and listed in [`ResolvedLine::unresolved`], exactly
-    /// like an unknown placeholder.
+    /// `viewer` is a player **name**, or [`None`] to render without a player.
+    /// The provider looks players up by name only, so a uuid resolves nothing.
+    /// A player placeholder resolved without a viewer is left in the text as
+    /// written and listed in [`ResolvedLine::unresolved`], exactly like an
+    /// unknown placeholder.
     ///
     /// # Errors
     /// Returns [`PieError`] if the provider cannot be reached or refuses.
@@ -162,9 +163,9 @@ impl PieClient {
         text: &str,
     ) -> Result<ResolvedLine, PieError> {
         let success = self.send(&Request::SetPlaceholders {
-            text: truncate(text, MAX_TEXT_LENGTH)?,
+            text: check_length(text, MAX_TEXT_LENGTH)?,
             viewer: viewer
-                .map(|name| truncate(name, MAX_ID_LENGTH))
+                .map(|name| check_length(name, MAX_ID_LENGTH))
                 .transpose()?,
             argument: None,
         })?;
@@ -215,9 +216,9 @@ impl PieClient {
         id: &str,
     ) -> Result<Option<String>, PieError> {
         let success = self.send(&Request::GetPlaceholderValue {
-            id: truncate(id, MAX_ID_LENGTH)?,
+            id: check_length(id, MAX_ID_LENGTH)?,
             viewer: viewer
-                .map(|name| truncate(name, MAX_ID_LENGTH))
+                .map(|name| check_length(name, MAX_ID_LENGTH))
                 .transpose()?,
             argument: None,
         })?;
@@ -264,10 +265,10 @@ impl PieClient {
         cache: Cache,
     ) -> Result<Registered, PieError> {
         let success = self.send(&Request::RegisterExpansion {
-            namespace: truncate(namespace, MAX_ID_LENGTH)?,
+            namespace: check_length(namespace, MAX_ID_LENGTH)?,
             placeholders: names
                 .iter()
-                .map(|name| truncate(name, MAX_ID_LENGTH))
+                .map(|name| check_length(name, MAX_ID_LENGTH))
                 .collect::<Result<Vec<_>, _>>()?,
             cache,
         })?;
@@ -303,7 +304,9 @@ impl PieClient {
     }
 }
 
-fn truncate(value: &str, limit: usize) -> Result<String, PieError> {
+/// Rejects a value over `limit`. It does not clip it: a caller that sends a
+/// 500-character viewer gets an error, never a silently shortened one.
+fn check_length(value: &str, limit: usize) -> Result<String, PieError> {
     if value.len() > limit {
         return Err(PieError::Unencodable(ProtocolError::TooLong {
             field: value.to_string(),
@@ -365,3 +368,4 @@ pub fn answer(
     };
     encode(&reply)
 }
+

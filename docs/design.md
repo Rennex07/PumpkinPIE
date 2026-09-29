@@ -89,8 +89,8 @@ plugin.
 
 ## Why the callback budget
 
-A resolved line is allowed sixteen expansion callbacks, counted per *occurrence*. This is a
-backstop, not a tuning knob: a placeholder that expands into text containing more placeholders, or
+A resolved line is allowed sixteen expansion callbacks, counted per *distinct* placeholder. This is
+a backstop, not a tuning knob: a placeholder that expands into text containing more placeholders, or
 two expansions that reference each other, would otherwise recurse. Past the budget the remaining
 placeholders are left in the text with a warning in the log.
 

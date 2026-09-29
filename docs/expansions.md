@@ -9,10 +9,10 @@ This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin
 ## Getting it onto a scoreboard
 
 This crate resolves text; it does not put that text anywhere. If you are building a scoreboard or
-tab list, the client-facing half is Pumpkin's own API, not this one — the `scoreboard` interface in
-[pumpkin-plugin-wit](https://github.com/Pumpkin-MC/Pumpkin/tree/master/crates/pumpkin-plugin-wit)
-covers `add-objective`, `set-display-slot`, `add-score` and the rest, and those are what you call
-with the resolved text. PumpkinPIE hands you the string; that interface decides where it goes.
+tab list, the client-facing half is Pumpkin's own API, not this one — start at
+[`scoreboard.wit`](https://github.com/Pumpkin-MC/Pumpkin/blob/master/crates/pumpkin-plugin-wit/v0.1/scoreboard.wit)
+for `add-objective`, `set-display-slot` and `add-score`, which is what you call with the resolved
+string. PumpkinPIE hands you the string; that interface decides where it goes.
 
 So the shape of a consumer is two halves: `set_placeholders` to turn `%player_ping%` into `42`, and
 the WIT to display it. Neither half knows about the other.
@@ -181,9 +181,6 @@ everything cached for your plugin on every `register_expansion` — so you can f
 way, at the cost of one extra round trip and a re-sent name list. Otherwise pick a TTL that suits
 how stale the value may be, or use `Cache::Never` and accept a callback per resolve.
 
-Note that the example above stores a plain `HashMap` and only ever reads it. The moment you write to
-it, it needs the lock the next section describes.
-
 ## The request context
 
 `ctx` is borrowed data only, and `viewer` is a player **name**, not a handle:
@@ -317,9 +314,10 @@ still costs one round trip.
 
 **The 128-character limit on a namespace, name, viewer or argument is enforced by `PieClient`, not
 by the provider.** The provider validates the length of an id and of a line's text, and nothing
-else — it will happily accept a 500-character namespace. The Rust client truncates all four before
-sending, so a `PieError::Unencodable` there never reaches the wire. A client in another language has
-no such guard.
+else — it will happily accept a 500-character namespace. The Rust client **refuses** anything
+over-long before sending, returning a `PieError::Unencodable` and never touching the wire. It does
+not silently clip it, so an over-long viewer is a hard error rather than a wrong answer. A client in
+another language has no such guard at all.
 
 ## A namespace collision is silent
 

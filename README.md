@@ -24,9 +24,16 @@ Pick the one you need. Each page stands on its own.
 | **Build, test, contribute** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | See **what was verified, per version** | [CHANGELOG.md](CHANGELOG.md) |
 
-The short version of the first two:
+The short version of the first two. This is the whole `Cargo.toml` — note the table order, which is
+load-bearing:
 
 ```toml
+# Without this your crate builds as a library and produces no component at all,
+# so the server silently ignores it. This is the single most common way a
+# Pumpkin plugin fails to load.
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 
@@ -40,19 +47,11 @@ tracing = "0.1"
 # manifest too. The path is the `../Pumpkin` checkout from Install below. If you
 # installed PumpkinPIE from a release you do not have one, so clone Pumpkin.
 #
-# Keep [patch.crates-io] last. TOML tables are order-sensitive, and a dependency
-# named after it but written below it becomes a patch entry rather than a
-# dependency — which fails with a confusing error, or not at all.
+# This must be the LAST table. TOML tables are order-sensitive: any table
+# written after this one falls inside it, so a [profile] below would be read as
+# a patch entry and fail, or worse, not fail.
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
-```
-
-```toml
-# Without this your crate builds as a library and produces no component at all,
-# so the server silently ignores it. This is the single most common way a
-# Pumpkin plugin fails to load.
-[lib]
-crate-type = ["cdylib"]
 ```
 
 Build it with the wasm target, and the `.wasm` lands in your server's `plugins/`:
@@ -77,6 +76,9 @@ tracing::info!("{}", line.text);
 
 **Depend on `pumpkin-pie` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so
 linking both crates fails to compile. See [docs/design.md](docs/design.md#why-two-crates).
+
+Full setup, including what to do if you installed from a release and have no Pumpkin checkout:
+[docs/consuming.md](docs/consuming.md#setup).
 
 ## Rules worth knowing before anything else
 

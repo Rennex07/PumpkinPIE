@@ -33,8 +33,8 @@ round trip.
 
 Note what is **not** enforced server-side: the provider checks the length of an id and of a line's
 text, and nothing else. Namespace, name, viewer and argument lengths are not validated. The Rust
-client truncates all four at 128 characters before sending, but a client in another language has no
-such limit and will be believed.
+client refuses all four above 128 characters before sending, so the request never goes out — but a
+client in another language has no such guard and will be believed.
 
 ### Responses carry a variant name
 
