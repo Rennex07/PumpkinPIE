@@ -1,14 +1,24 @@
 # Consuming placeholders
 
-For a plugin that shows placeholders — a tab list, a scoreboard, a chat formatter. If you want to
+For a plugin that *asks* for placeholders. A tab list, a scoreboard or a chat formatter is usually
+such a plugin, and so is anything else that renders a string someone else owns. If you want to
 *provide* placeholders instead, see [expansions.md](expansions.md).
 
-**This page covers resolving text, not displaying it.** PumpkinPIE turns `%player_ping%` into `42`;
-putting that on a scoreboard, in a tab list or in chat is Pumpkin's own client-facing API. Start at
-[`scoreboard.wit`](https://github.com/Pumpkin-MC/Pumpkin/blob/master/crates/pumpkin-plugin-wit/v0.1/scoreboard.wit),
-which is where `add-objective`, `set-display-slot` and `add-score` live, and where the resolved
-string goes. You will also need `player.wit` for the per-player handles those calls hang off. None
-of that is covered here.
+**You are one of three parties, and only one of them is PumpkinPIE.** It answers built-ins itself
+and asks whichever plugin registered a namespace to answer for its own placeholders. Nothing is
+wired to your plugin in particular, and nothing has to know you exist.
+
+```
+your plugin  ->  PumpkinPIE  ->  the plugin that registered the namespace
+   "%ranks_prefix%"     "Admin"
+```
+
+So this page covers asking. What you do with the answer is your business: a scoreboard plugin calls
+`set_placeholders` and then hands the string to Pumpkin's own
+[`scoreboard.wit`](https://github.com/Pumpkin-MC/Pumpkin/blob/master/crates/pumpkin-plugin-wit/v0.1/scoreboard.wit)
+(`add-objective`, `set-display-slot`, `add-score`), a chat plugin formats it, a tab list sends it
+in a header. All of that is Pumpkin's client-facing API, not this crate's, and none of it is
+covered here.
 
 ## Setup
 

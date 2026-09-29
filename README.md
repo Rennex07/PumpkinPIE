@@ -17,12 +17,24 @@ Pick the one you need. Each page stands on its own.
 
 | I want to... | Read |
 | --- | --- |
-| **Resolve** placeholders in my plugin | [docs/consuming.md](docs/consuming.md) |
+| **Ask** for placeholders in my plugin | [docs/consuming.md](docs/consuming.md) |
 | **Provide** placeholders to other plugins | [docs/expansions.md](docs/expansions.md) |
 | Implement a client in **another language** | [docs/protocol.md](docs/protocol.md) |
 | Know **why it works this way** | [docs/design.md](docs/design.md) |
 | **Build, test, contribute** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | See **what was verified, per version** | [CHANGELOG.md](CHANGELOG.md) |
+
+The two plugin pages meet in the middle, and a third party can join either side later without
+either of them changing:
+
+```
+your plugin  ->  PumpkinPIE  ->  whichever plugin registered the namespace
+  "%ranks_prefix%"      "Admin"
+```
+
+PumpkinPIE is the middleman. It answers the `player`, `server` and `pie` placeholders itself and
+asks the owner of a namespace for anything else, so a tab list, a scoreboard, a ranks plugin and an
+economy plugin can each be written by someone who never met.
 
 The short version of the first two. This is the whole `Cargo.toml` — note the table order, which is
 load-bearing:
