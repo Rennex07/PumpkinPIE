@@ -39,6 +39,10 @@ tracing = "0.1"
 # A patch in this repo's workspace has no effect on yours, so it goes in your
 # manifest too. The path is the `../Pumpkin` checkout from Install below. If you
 # installed PumpkinPIE from a release you do not have one, so clone Pumpkin.
+#
+# Keep [patch.crates-io] last. TOML tables are order-sensitive, and a dependency
+# named after it but written below it becomes a patch entry rather than a
+# dependency — which fails with a confusing error, or not at all.
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 ```

@@ -6,6 +6,11 @@ you only want to show placeholders, see [consuming.md](consuming.md).
 This is the `PlaceholderExpansion` equivalent. It is a full plugin: `impl Plugin`, a
 `PluginMetadata`, and `register_plugin!`.
 
+Three rules to pick a namespace by: it may not contain an underscore, it may not begin with a
+digit, and it may not be `player`, `server` or `pie` — the provider answers those itself and will
+refuse to hand them over. Breaking any of them is an `Err` from `register_expansion`, not a silent
+no-op.
+
 ## A complete expansion
 
 ```rust
@@ -26,12 +31,14 @@ use pumpkin_plugin_api::register_plugin;
 // Logging is `tracing`, not `log`. Pumpkin's API surface uses it throughout.
 use tracing::info;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, RwLock};
 
-// Your actual data. A real plugin would load this from config or a database in
-// `on_load`; see "Where state lives" below for why it is a `static` and not a
-// field on the plugin.
-static RANKS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+// Your actual data. `RwLock` because `handle_ipc_message` only gets `&self`,
+// so anything you write to later needs interior mutability. A real plugin would
+// fill this in `on_load`; see "Where state lives" for why it is a `static` and
+// not a field on the plugin.
+static RANKS: LazyLock<RwLock<HashMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub struct Ranks;
 
@@ -97,7 +104,8 @@ impl Ranks {
 
 fn rank_of(viewer: Option<&str>) -> Option<String> {
     let viewer = viewer?;
-    Some(RANKS.get(viewer).cloned().unwrap_or_else(|| "Member".to_string()))
+    let ranks = RANKS.read().ok()?;
+    Some(ranks.get(viewer).cloned().unwrap_or_else(|| "Member".to_string()))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -156,10 +164,14 @@ RANKS.write().ok()?.insert(name, rank);
 `crates/pumpkin-pie-testexp` uses the same shape with a `static AtomicU64`. An atomic is enough for
 a counter; anything you look up by player wants a lock.
 
-**A value changed at runtime stays stale until the TTL expires.** There is no push API and no
-invalidate call, so the provider's only lever is the TTL you register — and re-registering replaces
-your name list, so it is not a free way to force a refresh. If a value must appear immediately,
-either use `Cache::Never` and accept the round trips, or pick a short TTL.
+**A value changed at runtime stays stale until the TTL expires**, because there is no push API and
+no invalidate call. Re-registering *does* clear the cache for your namespaces — the provider drops
+everything cached for your plugin on every `register_expansion` — so you can force a refresh that
+way, at the cost of one extra round trip and a re-sent name list. Otherwise pick a TTL that suits
+how stale the value may be, or use `Cache::Never` and accept a callback per resolve.
+
+Note that the example above stores a plain `HashMap` and only ever reads it. The moment you write to
+it, it needs the lock the next section describes.
 
 ## The request context
 
@@ -178,7 +190,63 @@ a `match` arm for the name you registered will hit. `id` keeps the case it was w
 is what you want for echoing a placeholder back to a player.
 
 If you want to write the resolve function separately, its parameter type is
-`RequestContext<'_>`, re-exported from `pumpkin_pie`.
+`RequestContext<'_>`, re-exported from `pumpkin_pie`. That also makes it testable, because `answer`
+takes any `FnOnce(RequestContext<'_>) -> Option<String>` — a named function as well as a closure.
+
+## Testing your resolve function
+
+An expansion's logic is a pure function from a request to an `Option<String>`, and you can test it on
+the host without a server, a client, or the wasm target. Construct the request, hand the bytes to
+`answer`, and read the reply back:
+
+```rust
+use pumpkin_pie::protocol::{decode_response, encode};
+use pumpkin_pie::{Request, RequestContext, Success, answer};
+
+// A named function, which `answer` accepts just as readily as a closure.
+fn resolve(ctx: RequestContext<'_>) -> Option<String> {
+    match ctx.name {
+        "prefix" => Some(ctx.viewer?.to_string()),
+        _ => None,
+    }
+}
+
+fn ask(namespace: &str, name: &str) -> Option<String> {
+    let request = Request::OnRequest {
+        namespace: namespace.to_string(),
+        id: format!("{namespace}_{name}"),
+        name: name.to_string(),
+        viewer: Some("Steve".to_string()),
+        argument: None,
+    };
+    let reply = answer(&encode(&request).unwrap(), resolve).unwrap();
+    match decode_response(&reply).unwrap().into_success().unwrap() {
+        Success::OnRequest { value } => value,
+        other => panic!("expected an on_request reply, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_known_name_answers() {
+    assert_eq!(ask("ranks", "prefix").as_deref(), Some("Steve"));
+}
+
+#[test]
+fn an_unknown_name_declines() {
+    assert_eq!(ask("ranks", "nonsense"), None);
+}
+```
+
+Two things to know before you write tests here.
+
+**`on_load` never runs under `cargo test`**, so anything it does to set up your state has not
+happened. Put that setup in its own `fn` and call it from both `on_load` and the test, rather than
+relying on a `static` it leaves half-initialised.
+
+**The `#[cfg(target_arch = "wasm32")]` gate on `register_plugin!` is what makes this work.** The
+gate keeps the `init-plugin` export out of host builds, so a `cdylib` crate with a `#[cfg(test)]`
+module compiles and runs on the host with no symbol collision. Do not drop the gate and you lose
+both this and a working component.
 
 ## Do not call back into the provider
 
@@ -204,6 +272,10 @@ values barely move. `Cache::Never`, the default, asks you every time.
 
 The provider caps a TTL at 60 seconds, so a plugin cannot serve stale data indefinitely. Read
 `Registered::cache` to see what it actually applied.
+
+`register_expansion` returns a `Registered` with two fields — `placeholders`, the names the provider
+now advertises for your namespace, lowercased, and `cache`, the setting it actually applied after
+clamping. There is no `namespace` field; the namespace is what you passed in.
 
 ## Your name list is not a filter
 
