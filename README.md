@@ -30,18 +30,45 @@ The short version of the first two:
 [dependencies]
 pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 
+# You need this too: `pumpkin-plugin-api` is not a transitive dependency you can
+# use without declaring it, because `impl Plugin` and `register_command` come
+# from it. Match the version to the Pumpkin release you build against.
+pumpkin-plugin-api = "0.2.0"
+tracing = "0.1"
+
 # A patch in this repo's workspace has no effect on yours, so it goes in your
-# manifest too. The path is the `../Pumpkin` checkout from Install below.
+# manifest too. The path is the `../Pumpkin` checkout from Install below. If you
+# installed PumpkinPIE from a release you do not have one, so clone Pumpkin.
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 ```
+
+```toml
+# Without this your crate builds as a library and produces no component at all,
+# so the server silently ignores it. This is the single most common way a
+# Pumpkin plugin fails to load.
+[lib]
+crate-type = ["cdylib"]
+```
+
+Build it with the wasm target, and the `.wasm` lands in your server's `plugins/`:
+
+```bash
+rustup target add wasm32-wasip2
+cargo build --release --target wasm32-wasip2
+# -> target/wasm32-wasip2/release/<your-crate-name>.wasm, into plugins/
+```
+
+An unsigned `.wasm` logs a warning about untrusted sources. That is advisory — the plugin loads.
 
 ```rust
 use pumpkin_pie::PieClient;
 
 let pie = PieClient::new();
-let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms")?;
-println!("{}", line.text);
+// Inside `Plugin` methods, the `?` needs spelling out, because the trait's
+// `Result` carries a `String` and there is no `From<PieError>` for one.
+let line = pie.set_placeholders(Some("Steve"), "%player_ping%ms").map_err(|e| e.to_string())?;
+tracing::info!("{}", line.text);
 ```
 
 **Depend on `pumpkin-pie` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so

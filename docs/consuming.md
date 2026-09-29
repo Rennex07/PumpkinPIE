@@ -60,12 +60,34 @@ rather than a fragment. Its `/piecheck` command runs each call and logs what cam
 This is what batching exists for. One message per refresh instead of one per player:
 
 ```rust
+// (viewer, text) - the same order as set_placeholders' two arguments.
 let lines = [("Steve", "%player_ping%ms"), ("Alex", "%player_ping%ms")];
 let results = pie.set_placeholders_batch(&lines)?;
 ```
 
+Results come back in the order you sent them, so `results[i]` is line `i`. The array can also come
+back **shorter** than the requests: a line over the 32 KiB limit is dropped silently. Check the
+lengths match before zipping results back to players.
+
 Every batch line carries a viewer. The protocol allows a line with no viewer, but there is no Rust
-API for it yet, so a batch is always per player.
+API for it yet, so a batch is always per player — which means **a server-wide line like
+`%server_online% online` cannot go in a batch.** Send it as its own `set_placeholders(None, ...)` on
+each refresh.
+
+## Limits
+
+These bound you as a consumer, not just an expansion author:
+
+| Limit | Value | Exceeding it |
+| :-- | :-- | :-- |
+| Message size, either direction | 1 MiB | the message is refused |
+| One line of text | 32 KiB | the request is refused |
+| Lines per `set_placeholders_batch` | 8192 | the whole batch is refused |
+| Expansion callbacks per line | 16 | the rest are **left in the text**, with a warning in the log |
+
+That last row is the one that will surprise you. Sixteen placeholders from other plugins on a single
+line is easy to reach on a decorated tab list, and nothing in the response tells you it happened —
+you just get literal `%...%` back. If a line is elaborate, this is a likely cause.
 
 ## Things that will surprise you
 
@@ -78,8 +100,38 @@ surprise. `set_placeholders(None, "%player_name%")` gives you back the literal `
 `""`, because the provider cannot tell a viewerless player placeholder from an unknown one. If a
 line has to work both globally and per player, resolve it per player.
 
+**Those two are indistinguishable from the text alone.** Both land in `unresolved` and nothing says
+which happened. To tell them apart, ask directly:
+
+```rust
+// Known, but your line had no viewer:
+pie.get_placeholder_value(Some("Steve"), "player_ping")?;   // Some("42")
+// Genuinely not registered:
+pie.get_placeholder_value(Some("Steve"), "nope_nope")?;      // None
+```
+
+So: an id in `unresolved` that `get_placeholder_value` *does* return means you lost the viewer. An
+id it also returns `None` for means nobody provides it — usually a plugin that is not loaded.
+
+**`get_placeholder_value` returns `None` for three different things** — not registered, viewer not
+online, and a placeholder that needs an argument (it has no argument parameter). It is a probe, not
+an error channel.
+
 **`unresolved` is a diagnostic, not a failure.** It is empty on success and populated on a partial
 resolve; neither case is an `Err`.
+
+## Debugging a broken config
+
+In game, as an operator of level 2 or above:
+
+```
+/pie parse %player_ping%ms  %ranks_prefix%
+```
+
+It resolves the text and prints what it could **not** resolve as a red error line, returning a
+non-zero command result. That makes it the fastest way to find a typo without a client connected.
+`/pie` alone lists every registered placeholder, and `/pie expansions` shows who owns each namespace
+— useful when a namespace you expect is simply not loaded.
 
 ## Errors
 
