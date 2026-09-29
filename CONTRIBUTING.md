@@ -17,9 +17,9 @@ Two things worth knowing before you build:
 
 - **`pumpkin-plugin-api` is patched to a local path.** The root `Cargo.toml` points
   `[patch.crates-io]` at `../Pumpkin`, so building the workspace needs a Pumpkin checkout as a
-  sibling directory, or you need to change that line. The published crate's WIT is currently
-  identical to the server's, so the patch is a build convenience rather than a correctness
-  requirement — which is the reason a release build is worth having.
+  sibling directory, or you need to change that line. The published crate is one Minecraft version
+  behind the release this targets, so the patch is a real pin — which is the reason a release build
+  is worth having.
 - **Building the whole workspace builds both plugins**, and they cannot be linked together, which is
   the point of the crate split rather than a problem with it.
 

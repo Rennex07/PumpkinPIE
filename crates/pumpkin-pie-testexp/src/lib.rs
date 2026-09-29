@@ -148,10 +148,9 @@ impl Plugin for TestExp {
 }
 
 // The plugin's entry point is the `init-plugin` export a component needs, and
-// nothing on a host build wants it. Gating it to `wasm32` also keeps
-// `pumpkin-pie`'s own copy of that symbol from colliding with this crate's
-// when the test harness links, which is the only build where both end up in
-// one binary.
+// nothing on a host build wants it. Gating it to `wasm32` is what lets the
+// `#[cfg(test)]` module below link: without the gate the test binary would
+// carry the export too, and fail at link time.
 #[cfg(target_arch = "wasm32")]
 register_plugin!(TestExp);
 

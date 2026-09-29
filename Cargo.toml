@@ -19,21 +19,23 @@ serde_json = "1"
 pumpkin-plugin-api = "0.2.0"
 tracing = "0.1"
 
-# The published `pumpkin-plugin-api` is current: its 46 WIT files are identical
-# to the `0.2.0+26.3-26.51` release tag, and both declare
-# `package pumpkin:plugin@0.1.0`, which is what a component's type-check keys
-# off. So the dependency above can be satisfied from crates.io once upstream
-# publishes a version that the `^0.2.0` requirement accepts.
+# The published `pumpkin-plugin-api` is one Minecraft version behind this build.
+# Its 46 WIT files are an older snapshot: the `0.2.0+26.3-26.51` tag adds
+# `v-26-3` to player.wit, `boat-launch`/`boat-sink` to entity-statuses.wit and
+# 11 lines to data-components.wit, none of which the published crate has. The
+# package declaration is `package pumpkin:plugin@0.1.0` in both, so a component
+# type-checks - and the one file this crate actually consumes, ipc.wit, is
+# identical - but the APIs are not the same generation.
 #
-# The patch is here because it is not published: the only version on crates.io
-# is a `-dev` prerelease, `0.1.0-dev+26.2-26.45`, and a prerelease needs to be
-# named exactly, so it cannot be reached by a caret requirement. Drop this block
-# and the patch when upstream ships a matching non-prerelease, and a consumer
-# stops needing a sibling Pumpkin checkout.
+# So this is a real pin, not a convenience. The dependency above asks for
+# `^0.2.0` and the only published version is the prerelease
+# `0.1.0-dev+26.2-26.45`, which a caret requirement cannot reach anyway. Drop
+# this block when upstream publishes a non-prerelease that matches the server's
+# WIT, and a consumer stops needing a sibling Pumpkin checkout.
 #
-# Note that `master` has drifted from the release: commit 5746077df added a
-# line to `event.wit`. That is why `release.yml` pins a tag rather than building
-# against `master`.
+# `master` has drifted further from the release than the published crate has:
+# commit 5746077df added a line to event.wit. That is why `release.yml` pins a
+# tag rather than building against `master`.
 [patch.crates-io]
 pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 

@@ -243,8 +243,7 @@ fn report(sender: &CommandSender, label: &str, value: &str) {
 }
 
 // The plugin's entry point is the `init-plugin` export a component needs, and
-// nothing on a host build wants it. Gating it to `wasm32` also keeps
-// `pumpkin-pie`'s own copy of that symbol from colliding with this crate's
-// when the test harness links.
+// nothing on a host build wants it. Gating it to `wasm32` keeps the export out
+// of host builds, so the crate can also be linked into a test binary.
 #[cfg(target_arch = "wasm32")]
 register_plugin!(PieConsumer);

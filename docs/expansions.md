@@ -31,9 +31,9 @@ use pumpkin_pie::{answer, Cache, IpcMessage, PieClient, PieError, PluginId};
 use pumpkin_plugin_api::{Context, Plugin, PluginMetadata, Result};
 
 // `register_plugin!` is a macro from `pumpkin_plugin_api`, and has to be
-// imported like one. It is gated to wasm because a host build has no use for the
-// `init-plugin` export it defines, and defining it there collides with the
-// copy in `pumpkin-pie` when both land in one binary.
+// imported like one. It is gated to wasm so this crate can also carry a
+// #[cfg(test)] module: the macro defines the `init-plugin` export, which has no
+// place in a test binary.
 #[cfg(target_arch = "wasm32")]
 use pumpkin_plugin_api::register_plugin;
 
@@ -44,8 +44,8 @@ use std::sync::{LazyLock, RwLock};
 
 // Your actual data. `RwLock` because `handle_ipc_message` only gets `&self`,
 // so anything you write to later needs interior mutability. A real plugin would
-// fill this in `on_load`; see "Where state lives" for why it is a `static` and
-// not a field on the plugin.
+// fill this in `on_load`. A `Mutex` field on the plugin value works too; see
+// "Where state lives" for when to prefer that.
 static RANKS: LazyLock<RwLock<HashMap<String, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
@@ -121,10 +121,11 @@ fn rank_of(viewer: Option<&str>) -> Option<String> {
 register_plugin!(Ranks);
 ```
 
-The two `#[cfg(target_arch = "wasm32")]` gates are not optional decoration. `register_plugin!`
-defines the `init-plugin` export that every Pumpkin plugin needs, and a host build has no use for
-it. Dropping the gate compiles fine and then fails on the server with a component that exports
-nothing.
+The two `#[cfg(target_arch = "wasm32")]` gates are what let a `cdylib` crate also carry a
+`#[cfg(test)]` module. `register_plugin!` defines the `init-plugin` export, which a host build has
+no use for and which conflicts when the crate is linked into a test binary. Keep the gate and both
+`cargo build --target wasm32-wasip2` and `cargo test` work. Drop it and the wasm build still
+succeeds — but `cargo test` stops linking.
 
 `crates/pumpkin-pie-testexp` is a working expansion you can copy from.
 
@@ -142,19 +143,37 @@ nothing.
 
 ## Where state lives
 
-This is the first thing that trips people up, so it is worth being blunt: **you cannot put your data
-on the plugin value.**
+You need somewhere to keep a balance table, and the obvious spot does not work — not because it is
+forbidden, but because of what the trait hands you:
 
 ```rust
 fn handle_ipc_message(&self, ...) -> ...   // &self, not &mut self
 fn new() -> Self                           // takes no arguments
 ```
 
-`&self` cannot be mutated, and `new()` gives you nowhere to put a balance table. So a struct field
-like `ranks: HashMap<String, String>` does not work, and neither does building one in `on_load` —
-the `Context` you get there is dropped when `on_load` returns.
+A plain `HashMap` field will not compile, because `&self` gives you only a shared borrow. A field
+behind a lock or a `Cell` **does** work, and is a reasonable choice:
 
-Use a `static` instead, with interior mutability:
+```rust
+pub struct Ranks {
+    ranks: Mutex<HashMap<String, String>>,
+}
+
+impl Ranks {
+    fn new() -> Self {
+        Self { ranks: Mutex::new(HashMap::new()) }
+    }
+}
+```
+
+Two things to know if you go this way. `new()` takes no arguments, so anything you need to read from
+disk or the environment has to be loaded in `on_load` and stored. And `on_load` gets a `Context`
+that is dropped when it returns, so do not hold on to that — load what you need into your own field
+instead. (A `OnceLock<Context>` would technically compile, but the context is a live handle and
+keeping one past `on_load` buys you nothing.)
+
+The alternative, and the shape `crates/pumpkin-pie-testexp` uses, is a `static` with interior
+mutability:
 
 ```rust
 use std::sync::LazyLock;
@@ -170,8 +189,10 @@ let rank = RANKS.read().ok()?.get(viewer).cloned();
 RANKS.write().ok()?.insert(name, rank);
 ```
 
-`crates/pumpkin-pie-testexp` uses the same shape with a `static AtomicU64`. An atomic is enough for
-a counter; anything you look up by player wants a lock.
+Either is fine. A field keeps the state with the plugin and is what most people expect; a `static`
+is process-global, which is the right scope for "state about a server" but means a host that ever
+loaded two copies of your plugin would share one table. An atomic is enough for a counter; anything
+you look up by player wants a lock either way.
 
 **A value changed at runtime stays stale until the TTL expires**, because there is no push API and
 no invalidate call. Re-registering *does* clear the cache for your namespaces — the provider drops

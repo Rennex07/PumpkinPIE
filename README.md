@@ -36,8 +36,8 @@ PumpkinPIE is the middleman. It answers the `player`, `server` and `pie` placeho
 asks the owner of a namespace for anything else, so a tab list, a scoreboard, a ranks plugin and an
 economy plugin can each be written by someone who never met.
 
-The short version of the first two. This is the whole `Cargo.toml` — note the table order, which is
-load-bearing:
+The short version of the first two, with the parts you fill in yourself marked. Note the table
+order, which is load-bearing:
 
 ```toml
 # Without this your crate builds as a library and produces no component at all,

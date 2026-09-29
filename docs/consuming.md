@@ -22,8 +22,9 @@ covered here.
 
 ## Setup
 
-Your crate needs all of this, not just the first line — a plugin that is missing any of it either
-fails to compile or, worse, builds a library the server silently ignores:
+Your crate needs all of this, not just the first line — a plugin missing any of it either fails to
+compile or, worse, builds a library the server silently ignores. Alongside your own `[package]`
+and `[lib]` tables:
 
 ```toml
 [lib]
@@ -120,8 +121,7 @@ expansion, which is all it ever gets to work with.
 If your provider is registered under a different name than `PumpkinPIE`, use
 `PieClient::with_provider("...")` rather than the default `PieClient::new()`.
 
-`crates/pumpkin-pie-consumer` is a working plugin that does all of this, so you can read a real one
-rather than a fragment. Its `/piecheck` command runs each call and logs what came back.
+Its `/piecheck` command runs each call and logs what came back.
 
 ## Refreshing a tab list or scoreboard
 
