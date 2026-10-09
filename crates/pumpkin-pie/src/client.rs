@@ -183,19 +183,19 @@ impl PieClient {
     /// This is what a tab list or scoreboard refreshing every player should
     /// call: one message per refresh instead of one per player.
     ///
+    /// **The whole request is refused when any line is too long.** The provider
+    /// would otherwise drop that line and return a shorter `results`, and both
+    /// arrays are indexed positionally, so every line after the dropped one
+    /// receives its neighbour's answer.
+    ///
     /// # Errors
-    /// Returns [`PieError`] if the provider cannot be reached or refuses.
+    /// Returns [`PieError::Unencodable`] if any line or viewer exceeds its length
+    /// limit, and [`PieError`] if the provider cannot be reached or refuses.
     pub fn set_placeholders_batch(
         &self,
         lines: &[(&str, &str)],
     ) -> Result<Vec<ResolvedLine>, PieError> {
-        let requests = lines
-            .iter()
-            .map(|(viewer, text)| Line {
-                viewer: Some((*viewer).to_string()),
-                text: (*text).to_string(),
-            })
-            .collect();
+        let requests = check_lines(lines)?;
         let success = self.send(&Request::SetPlaceholdersBatch { requests })?;
         match success {
             Success::ResolvedBatch { results } => Ok(results),
@@ -314,6 +314,32 @@ fn check_length(value: &str, limit: usize) -> Result<String, PieError> {
         }));
     }
     Ok(value.to_string())
+}
+
+/// Validates a batch before it is sent.
+///
+/// `set_placeholders` has always length-checked its one line; this path did not
+/// check at all, which is how a 40 KiB line got sent and then dropped by the
+/// provider, shortening `results` relative to the request.
+fn check_lines(lines: &[(&str, &str)]) -> Result<Vec<Line>, PieError> {
+    lines
+        .iter()
+        .map(|(viewer, text)| {
+            Ok(Line {
+                viewer: Some(check_length(viewer, MAX_ID_LENGTH)?),
+                text: check_length(text, MAX_TEXT_LENGTH)?,
+            })
+        })
+        .collect()
+}
+
+/// [`check_lines`], for the integration tests only.
+///
+/// So a consumer cannot build a `Line` around the check and skip it, which is how
+/// the batch path ended up with no check at all.
+#[cfg(feature = "test-internals")]
+pub fn check_lines_for_testing(lines: &[(&str, &str)]) -> Result<Vec<Line>, PieError> {
+    check_lines(lines)
 }
 
 /// Turns an incoming `on_request` message into a reply.

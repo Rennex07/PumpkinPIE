@@ -16,9 +16,21 @@ authors.workspace = true
 # consumer can never inherit this crate's `init-plugin` export.
 crate-type = ["rlib"]
 
+[features]
+# Exposes check_lines_for_testing to the integration tests. Off by default: a
+# consumer never needs it, and the check must stay the only way a batch is built.
+test-internals = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 thiserror = "2"
 pumpkin-plugin-api.workspace = true
 tracing.workspace = true
+
+# The batch length check. Needs 	est-internals to reach check_lines_for_testing,
+# and is otherwise skipped rather than failing to build - a consumer running a plain
+# cargo test must not be told about a hook it did not ask for.
+[[test]]
+name = "client"
+required-features = ["test-internals"]
