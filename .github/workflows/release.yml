@@ -81,6 +81,15 @@ jobs:
           $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
           "sha=$(git -C $dest rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
+      # The Market wants the version without a leading `v`, and the tag and the
+      # release both carry one, so it is stripped once here rather than in every
+      # consumer.
+      - name: Record the version
+        id: version
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          "value=$version" >> $env:GITHUB_OUTPUT
+
       # The component is attached bare rather than zipped. It is the only file
       # that ships, and a server admin's next step is to drop it into a `plugins`
       # folder, which is one click from a `.wasm` and two from a zip.
@@ -105,3 +114,30 @@ jobs:
             see that, you are on a server built from a different Pumpkin commit
             than the one above.
           fail_on_unmatched_files: true
+
+      # The Market listing, updated from the same file that just became the
+      # release. `plugin-id` is the listing's public ID, which is used instead of
+      # `plugin-name` because the listing's name is `PumpkinPIE  | Placeholders
+      # for all` - two spaces and a pipe - and a name match would break on an
+      # edit nobody notices.
+      #
+      # Needs `MARKET_API_TOKEN` in the repository secrets, scoped
+      # `plugins:update` and `plugins:versions:upload`. Without it the step fails,
+      # which is deliberate: a release that silently skips the Market is a release
+      # nobody can find.
+      - name: Publish to the Pumpkin Market
+        uses: filiphsps/pumpkin-plugins/actions/publish-to-pumpkin-market@publish-to-pumpkin-market-v0.0.4
+        with:
+          plugin-id: TV3Ord4H
+          version: ${{ steps.version.outputs.value }}
+          wasm-file: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
+          api-token: ${{ secrets.MARKET_API_TOKEN }}
+          track: stable
+          release-notes: |
+            Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
+            `${{ steps.pumpkin.outputs.sha }}`.
+
+            Fixes `set_placeholders_batch` sending a line over 32 KiB, which the
+            provider dropped and returned a shorter results array for, so every
+            line after it read its neighbour's answer. The batch is refused whole
+            instead.
