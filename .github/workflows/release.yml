@@ -84,10 +84,17 @@ jobs:
       # The Market wants the version without a leading `v`, and the tag and the
       # release both carry one, so it is stripped once here rather than in every
       # consumer.
+      #
+      # `inputs.tag` takes priority because a `workflow_dispatch` run has no tag
+      # ref at all: `GITHUB_REF_NAME` is the branch name, so a manual run would
+      # otherwise publish a version literally called `main`. This is not
+      # hypothetical - it happened, and the Market listing grew a `main` version.
       - name: Record the version
         id: version
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $version = "${{ inputs.tag }}"
+          if (-not $version) { $version = $env:GITHUB_REF_NAME }
+          $version = $version -replace '^v', ''
           "value=$version" >> $env:GITHUB_OUTPUT
 
       # The component is attached bare rather than zipped. It is the only file
