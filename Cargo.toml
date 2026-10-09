@@ -6,7 +6,7 @@ members = ["crates/*"]
 # The plugin reports this through `CARGO_PKG_VERSION`, so it has to track the
 # release tag. Leaving it at 0.1.0 while releases were tagged 0.2.x meant the
 # provider logged itself as 0.1.0 and the marketplace would have listed 0.1.0.
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 rust-version = "1.85"
 license = "GPL-3.0-only"

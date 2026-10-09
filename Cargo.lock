@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-pie"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "pumpkin-plugin-api",
  "serde",
@@ -213,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-pie-consumer"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "pumpkin-pie",
  "pumpkin-plugin-api",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-pie-plugin"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "pumpkin-pie",
  "pumpkin-plugin-api",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-pie-testexp"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "pumpkin-pie",
  "pumpkin-plugin-api",

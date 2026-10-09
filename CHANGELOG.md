@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-Protocol version `0`. Workspace version `0.2.2`.
+Protocol version `0`. Workspace version `0.2.3`.
+
+### Fixed
+
+- `set_placeholders_batch` no longer sends a line over 32 KiB. It checked nothing,
+  so the line was sent and then dropped by the provider's filter, which returned a
+  `results` array shorter than the request. Both arrays are indexed positionally,
+  so every line after the dropped one received its neighbour's answer. The batch is
+  now refused whole, and the caller keeps its own text.
 
 Verified on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**, driving the server
 over its console so no client is needed. Three components load together: the provider, an expansion,
