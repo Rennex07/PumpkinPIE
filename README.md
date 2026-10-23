@@ -52,18 +52,12 @@ pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 # You need this too: `pumpkin-plugin-api` is not a transitive dependency you can
 # use without declaring it, because `impl Plugin` and `register_command` come
 # from it. Match the version to the Pumpkin release you build against.
-pumpkin-plugin-api = "0.2.0"
-tracing = "0.1"
-
-# A patch in this repo's workspace has no effect on yours, so it goes in your
-# manifest too. The path is the `../Pumpkin` checkout from Install below. If you
-# installed PumpkinPIE from a release you do not have one, so clone Pumpkin.
 #
-# This must be the LAST table. TOML tables are order-sensitive: any table
-# written after this one falls inside it, so a [profile] below would be read as
-# a patch entry and fail, or worse, not fail.
-[patch.crates-io]
-pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
+# This resolves from crates.io, so there is no Pumpkin checkout to clone and no
+# `[patch.crates-io]` to write. The published `0.2.0+26.3-26.51` crate carries
+# the same plugin WIT as the matching Pumpkin release.
+pumpkin-plugin-api = "=0.2.0+26.3-26.51"
+tracing = "0.1"
 ```
 
 Build it with the wasm target, and the `.wasm` lands in your server's `plugins/`:
@@ -89,8 +83,7 @@ tracing::info!("{}", line.text);
 **Depend on `pumpkin-pie` only.** Every Pumpkin plugin exports a symbol called `init-plugin`, so
 linking both crates fails to compile. See [docs/design.md](docs/design.md#why-two-crates).
 
-Full setup, including what to do if you installed from a release and have no Pumpkin checkout:
-[docs/consuming.md](docs/consuming.md#setup).
+Full setup, including the exact version to pin: [docs/consuming.md](docs/consuming.md#setup).
 
 ## Rules worth knowing before anything else
 
@@ -126,21 +119,12 @@ from in its notes.
 
 ### From source
 
-Source builds build against a local Pumpkin checkout, so clone both as siblings:
+Clone this repository on its own. There is no Pumpkin checkout to clone next to it, because
+`pumpkin-plugin-api` resolves from crates.io:
 
 ```bash
-git clone https://github.com/Pumpkin-MC/Pumpkin.git
 git clone https://github.com/Rennex07/PumpkinPIE.git
 ```
-
-```
-somewhere/
-├── Pumpkin/          <- the server sources
-└── PumpkinPIE/      <- this
-```
-
-If you keep them elsewhere, edit the `[patch.crates-io]` path in `Cargo.toml`. It points at
-`../Pumpkin/crates/pumpkin-plugin-api`.
 
 Then:
 

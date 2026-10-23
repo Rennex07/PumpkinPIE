@@ -15,11 +15,13 @@ loop. What they cannot check is what a real client sees, which is the one comman
 
 Two things worth knowing before you build:
 
-- **`pumpkin-plugin-api` is patched to a local path.** The root `Cargo.toml` points
-  `[patch.crates-io]` at `../Pumpkin`, so building the workspace needs a Pumpkin checkout as a
-  sibling directory, or you need to change that line. The published crate is one Minecraft version
-  behind the release this targets, so the patch is a real pin — which is the reason a release build
-  is worth having.
+- **`pumpkin-plugin-api` resolves from crates.io.** The root `Cargo.toml` pins it to
+  `=0.2.0+26.3-26.51`, the published release whose plugin WIT matches the `0.2.0+26.3-26.51` server
+  release, so building the workspace needs no Pumpkin checkout next to it. The pin is exact on
+  purpose: a caret requirement would let a later `0.2.x` satisfy it, and Pumpkin has kept one
+  version string across a WIT change before, which breaks the component at load time rather than at
+  build time. `tools/check-wit.ps1` checks the published crate against the expected WIT tree, and CI
+  runs it.
 - **Building the whole workspace builds both plugins**, and they cannot be linked together, which is
   the point of the crate split rather than a problem with it.
 

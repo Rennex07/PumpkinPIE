@@ -36,13 +36,12 @@ crate-type = ["cdylib"]
 pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 # Not transitive: `impl Plugin`, `Context` and `register_command` come from here,
 # so a plugin cannot use them without declaring it. Match your Pumpkin release.
-pumpkin-plugin-api = "0.2.0"
+#
+# This resolves from crates.io, so there is no Pumpkin checkout to clone and no
+# `[patch.crates-io]` to write. The published `0.2.0+26.3-26.51` crate carries
+# the same plugin WIT as the matching Pumpkin release.
+pumpkin-plugin-api = "=0.2.0+26.3-26.51"
 tracing = "0.1"
-
-# Keep [patch.crates-io] last - TOML tables are order-sensitive, and a dependency
-# written below it becomes a patch entry rather than a dependency.
-[patch.crates-io]
-pumpkin-plugin-api = { path = "../Pumpkin/crates/pumpkin-plugin-api" }
 ```
 
 Then build it, and drop the artifact in your server's `plugins/`:
@@ -55,10 +54,11 @@ cargo build --release --target wasm32-wasip2
 
 Two things about that.
 
-**The `[patch.crates-io]` must be in *your* `Cargo.toml`.** A patch declared in this repository's
-workspace has no effect on yours. The path is the `../Pumpkin` checkout from
-[Install](../README.md#from-source); adjust it to wherever yours lives. If you installed PumpkinPIE
-from a release you do not have one, so clone Pumpkin.
+**Pin the version exactly.** `pumpkin-plugin-api = "=0.2.0+26.3-26.51"` is not a preference: a
+caret requirement would let a later `0.2.x` satisfy the dependency, and Pumpkin has kept one version
+string across a WIT change before. A component built against the wrong WIT still compiles, and the
+server then refuses to load it with a bare `type-checking export func 'handle-event'`. The exact
+requirement is what makes the build reproducible.
 
 **Do not also depend on `pumpkin-pie-plugin`.** Every Pumpkin plugin exports a symbol called
 `init-plugin`, so linking both crates fails to compile with `duplicate symbol: init-plugin`. The
