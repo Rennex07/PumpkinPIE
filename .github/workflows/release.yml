@@ -1,10 +1,9 @@
 name: release
 
-# The provider has to be built against a `pumpkin-plugin-api` whose WIT matches
-# the server that will load it, and the published crate is behind the server. So
-# this workflow builds against a checkout of Pumpkin placed as a sibling of the
-# workspace, which is what the `[patch.crates-io]` in the root `Cargo.toml`
-# points at.
+# The provider is built against the `pumpkin-plugin-api` crate from crates.io,
+# which is the same crate the `0.2.0+26.3-26.51` server release carries, so a
+# build needs no sibling checkout of Pumpkin and anyone can build this plugin
+# without one.
 on:
   push:
     tags: ["v*"]
@@ -18,22 +17,21 @@ permissions:
   contents: write
 
 env:
-  # The Pumpkin revision whose `pumpkin-plugin-api` this is built against.
+  # The plugin WIT that the component is built against.
   #
-  # This is a release TAG, not `master`, and that matters. The marketplace
-  # serves the published release, so the component has to be built against the
-  # WIT in that release. Upstream `master` has a different WIT — commit
-  # 5746077df (#3568) added an AI event to `event.wit` — and a component built
-  # against it fails to load on the release with a bare
-  # `type-checking export func 'handle-event'` and no explanation.
+  # The version string cannot be used to check this: Pumpkin kept the
+  # `0.2.0+26.3-26.51` version string across a WIT change, so a server and a
+  # component can both report the same version and still disagree. A mismatch
+  # shows as a bare "type-checking export func 'handle-event'".
   #
-  # `nightly` shares the release's WIT, so this build also covers nightly.
-  # Verified by loading it in the official `pumpkin-X64-Windows.exe` from this
-  # tag: provider loads, all IPC checks pass.
+  # The tree hash of crates/pumpkin-plugin-wit/v0.1 in the matching Pumpkin
+  # release. This is the only thing that actually decides whether a component
+  # loads.
   #
-  # Bump it when a new Pumpkin release ships, and re-verify before publishing.
-  PUMPKIN_REPO: Pumpkin-MC/Pumpkin
-  PUMPKIN_REF: 0.2.0+26.3-26.51
+  # Bump the `pumpkin-plugin-api` requirement in the manifests and WIT_TREE
+  # together. `tools/check-wit.ps1` reads the version from the requirement, so
+  # there is only one place to bump the version.
+  WIT_TREE: e0bb97ea48d9857c181356ba14964d47b20d0f56
 
 jobs:
   build:
@@ -41,15 +39,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cloned rather than checked out with `path:`, because that input nests the
-      # repository *inside* the workspace, and the `[patch.crates-io]` in the
-      # root `Cargo.toml` points at `../Pumpkin`, a sibling of the workspace.
-      - name: Clone the plugin API the component is built against
-        run: |
-          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
-          git clone --depth 1 --branch $env:PUMPKIN_REF "https://github.com/$env:PUMPKIN_REPO" $dest
-          "Cloned $env:PUMPKIN_REPO@$env:PUMPKIN_REF into $dest"
-          git -C $dest rev-parse HEAD
+      # The compatibility check, made explicit. The crate is resolved from
+      # crates.io, so this is what the build actually resolves.
+      - name: Verify the plugin WIT matches the pinned tree
+        id: wit
+        shell: pwsh
+        run: tools/check-wit.ps1
 
       - name: Install the wasm32-wasip2 target
         run: rustup target add wasm32-wasip2
@@ -71,15 +66,6 @@ jobs:
           path: |
             target/wasm32-wasip2/release/pumpkin_pie_testexp.wasm
             target/wasm32-wasip2/release/pumpkin_pie_consumer.wasm
-
-      # Recorded before the release body needs it, and from the same path the
-      # clone used rather than a relative `Pumpkin`, which is not in the
-      # workspace.
-      - name: Record the Pumpkin revision
-        id: pumpkin
-        run: |
-          $dest = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) Pumpkin
-          "sha=$(git -C $dest rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
       # The Market wants the version without a leading `v`, and the tag and the
       # release both carry one, so it is stripped once here rather than in every
@@ -109,9 +95,10 @@ jobs:
             Download `pumpkin_pie_plugin.wasm` and drop it into your server's
             `plugins` directory.
 
-            Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
-            `${{ steps.pumpkin.outputs.sha }}`. Verified by loading it in the
-            official Windows binary from that tag.
+            Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}` from
+            crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`. Verified by
+            loading it in the official Windows binary from the matching Pumpkin
+            release.
 
             **Compatibility is not by version number.** Pumpkin kept the
             `0.2.0+26.3-26.51` version string while changing its plugin WIT, so
@@ -141,8 +128,8 @@ jobs:
           api-token: ${{ secrets.MARKET_API_TOKEN }}
           track: stable
           release-notes: |
-            Built against `${{ env.PUMPKIN_REPO }}@${{ env.PUMPKIN_REF }}` at
-            `${{ steps.pumpkin.outputs.sha }}`.
+            Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}` from
+            crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`.
 
             Fixes `set_placeholders_batch` sending a line over 32 KiB, which the
             provider dropped and returned a shorter results array for, so every
