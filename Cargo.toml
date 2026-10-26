@@ -16,17 +16,8 @@ authors = ["Rennex"]
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Resolved from crates.io, so a build needs no sibling Pumpkin checkout. The
-# release crate `0.2.0+26.3-26.51` (published 2026-09-29) carries the same WIT
-# generation as the `0.2.0+26.3-26.51` server binary on pumpkinmc.org:
-# verified 2026-10-23, all 46 WIT files are byte-identical to the WIT tree of
-# the Pumpkin release tag `204a94ed8`,
-# `crates/pumpkin-plugin-wit@e0bb97ea48d9857c181356ba14964d47b20d0f56`.
-# The version string still is not a guarantee by itself - Pumpkin kept
-# `0.2.0+26.3-26.51` across a WIT change once, and fork `master` is already
-# another generation (10 of 46 files match) - so the requirement is pinned
-# exact rather than caret.
-pumpkin-plugin-api = "=0.2.0+26.3-26.51"
+# Resolved from crates.io, pumpkin-plugin-api 0.2.1+26.3-26.51 published 2026-10-25
+pumpkin-plugin-api = "=0.2.1+26.3-26.51"
 tracing = "0.1"
 
 # A plugin is a component, not a native library, so the size of the artifact is
