@@ -69,7 +69,6 @@ fn root() -> Command {
         )
 }
 
-/// The single handler behind every `/pie` branch.
 struct PieCommand;
 
 impl CommandHandler for PieCommand {
@@ -99,7 +98,6 @@ impl CommandHandler for PieCommand {
     }
 }
 
-/// Bare `/pie`, or `/pie` with nothing to parse.
 fn help(sender: &CommandSender) -> std::result::Result<i32, CommandError> {
     sender.send_message(TextComponent::text(USAGE));
     for builtin in builtins::BUILTINS {
@@ -114,7 +112,6 @@ fn help(sender: &CommandSender) -> std::result::Result<i32, CommandError> {
     Ok(0)
 }
 
-/// Offers `%placeholder%` completions for the token the cursor sits in.
 struct PieSuggestions;
 
 impl CommandSuggestionHandler for PieSuggestions {
