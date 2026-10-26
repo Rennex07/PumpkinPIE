@@ -381,7 +381,6 @@ fn ask_expansion(source: &str, request: &Request) -> Option<String> {
     }
 }
 
-/// The provider plugin. Holds no state of its own; see [`state`].
 pub struct PumpkinPie;
 
 impl Plugin for PumpkinPie {
