@@ -16,12 +16,10 @@ loop. What they cannot check is what a real client sees, which is the one comman
 Two things worth knowing before you build:
 
 - **`pumpkin-plugin-api` resolves from crates.io.** The root `Cargo.toml` pins it to
-  `=0.2.0+26.3-26.51`, the published release whose plugin WIT matches the `0.2.0+26.3-26.51` server
-  release, so building the workspace needs no Pumpkin checkout next to it. The pin is exact on
-  purpose: a caret requirement would let a later `0.2.x` satisfy it, and Pumpkin has kept one
-  version string across a WIT change before, which breaks the component at load time rather than at
-  build time. `tools/check-wit.ps1` checks the published crate against the expected WIT tree, and CI
-  runs it.
+  `=0.2.1+26.3-26.51`, whose plugin WIT matches the targeted public Pumpkin release. The exact
+  requirement excludes later `0.2.x` releases, but Cargo ignores semver build metadata when matching
+  requirements. Use the lockfile and `tools/check-wit.ps1` to verify the resolved WIT; a mismatch
+  breaks the component at load time rather than at build time.
 - **Building the whole workspace builds both plugins**, and they cannot be linked together, which is
   the point of the crate split rather than a problem with it.
 

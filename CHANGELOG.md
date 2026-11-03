@@ -1,10 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.5
 
-Protocol version `0`. Workspace version `0.2.3`.
+Protocol version `0`. Workspace version `0.2.5`. Built against the public
+Pumpkin 0.2.1+26.3-26.51 API; the changes below have not been verified on a live server.
 
 ### Fixed
+
+- Cache expansion values separately by optional argument and bound cache memory.
+- Limit placeholder output and encoded responses, and refuse oversized batches whole.
+- Normalize callback namespaces for mixed-case placeholder IDs.
 
 - `set_placeholders_batch` no longer sends a line over 32 KiB. It checked nothing,
   so the line was sent and then dropped by the provider's filter, which returned a
@@ -12,7 +17,7 @@ Protocol version `0`. Workspace version `0.2.3`.
   so every line after the dropped one received its neighbour's answer. The batch is
   now refused whole, and the caller keeps its own text.
 
-Verified on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)**, driving the server
+Earlier verification on **Pumpkin 0.2.0+26.3-26.51, Minecraft Java 26.3 (protocol 777)** drove the server
 over its console so no client is needed. Three components load together: the provider, an expansion,
 and a consumer.
 

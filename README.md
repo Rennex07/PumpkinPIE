@@ -54,9 +54,9 @@ pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 # from it. Match the version to the Pumpkin release you build against.
 #
 # This resolves from crates.io, so there is no Pumpkin checkout to clone and no
-# `[patch.crates-io]` to write. The published `0.2.0+26.3-26.51` crate carries
+# `[patch.crates-io]` to write. The published `0.2.1+26.3-26.51` crate carries
 # the same plugin WIT as the matching Pumpkin release.
-pumpkin-plugin-api = "=0.2.0+26.3-26.51"
+pumpkin-plugin-api = "=0.2.1+26.3-26.51"
 tracing = "0.1"
 ```
 
@@ -109,7 +109,7 @@ Download `pumpkin_pie_plugin.wasm` from the
 server's `plugins/` folder. That is the whole install. Start the server and you should see:
 
 ```
-[INFO] PumpkinPIE 0.2.2 ready with 11 built in placeholders
+[INFO] PumpkinPIE 0.2.5 ready with 11 built in placeholders
 ```
 
 **Use a release built against your server.** A component is compiled against a specific
