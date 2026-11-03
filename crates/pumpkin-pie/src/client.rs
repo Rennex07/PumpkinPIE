@@ -183,10 +183,8 @@ impl PieClient {
     /// This is what a tab list or scoreboard refreshing every player should
     /// call: one message per refresh instead of one per player.
     ///
-    /// **The whole request is refused when any line is too long.** The provider
-    /// would otherwise drop that line and return a shorter `results`, and both
-    /// arrays are indexed positionally, so every line after the dropped one
-    /// receives its neighbour's answer.
+    /// **The whole request is refused when any line is too long.** This also
+    /// protects callers using older providers that silently dropped such lines.
     ///
     /// # Errors
     /// Returns [`PieError::Unencodable`] if any line or viewer exceeds its length

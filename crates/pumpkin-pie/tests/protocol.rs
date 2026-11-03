@@ -24,6 +24,19 @@ mod tokens {
     use super::*;
 
     #[test]
+    fn bounded_substitution_stops_repeated_expansion() {
+        use pumpkin_pie::tokens::try_substitute;
+        assert_eq!(
+            try_substitute("%x% %x%", 7, |_, _| Some("abc".into()))
+                .unwrap()
+                .text,
+            "abc abc"
+        );
+        assert!(try_substitute("%x% %x%", 6, |_, _| Some("abc".into())).is_err());
+        assert!(try_substitute("é", 1, |_, _| None).is_err());
+    }
+
+    #[test]
     fn replaces_a_single_token() {
         let out = substitute(
             "hello %player_name%",
@@ -117,6 +130,15 @@ mod tokens {
 
 mod wire {
     use super::*;
+
+    #[test]
+    fn encoding_rejects_oversized_json() {
+        use pumpkin_pie::protocol::MAX_MESSAGE_BYTES;
+        assert_eq!(
+            encode(&"x".repeat(MAX_MESSAGE_BYTES)),
+            Err(ProtocolError::TooLarge)
+        );
+    }
 
     #[test]
     fn a_request_round_trips() {

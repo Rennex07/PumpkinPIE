@@ -8,6 +8,7 @@
 //! an older revision of this file still works against a newer provider.
 
 use serde::{Deserialize, Serialize};
+use std::io::{self, Write};
 
 /// Version of the protocol. A consumer should call [`Request::Ping`] and check
 /// this before relying on anything else.
@@ -255,11 +256,38 @@ impl Response {
 
 /// Encodes a value to bytes, refusing anything oversized.
 pub fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, ProtocolError> {
-    let bytes = serde_json::to_vec(value).map_err(|_| ProtocolError::NotJson)?;
-    if bytes.len() > MAX_MESSAGE_BYTES {
-        return Err(ProtocolError::TooLarge);
+    let mut writer = LimitedWriter {
+        bytes: Vec::new(),
+        too_large: false,
+    };
+    serde_json::to_writer(&mut writer, value).map_err(|_| {
+        if writer.too_large {
+            ProtocolError::TooLarge
+        } else {
+            ProtocolError::NotJson
+        }
+    })?;
+    Ok(writer.bytes)
+}
+
+struct LimitedWriter {
+    bytes: Vec<u8>,
+    too_large: bool,
+}
+
+impl Write for LimitedWriter {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        if data.len() > MAX_MESSAGE_BYTES.saturating_sub(self.bytes.len()) {
+            self.too_large = true;
+            return Err(io::Error::other("message too large"));
+        }
+        self.bytes.extend_from_slice(data);
+        Ok(data.len())
     }
-    Ok(bytes)
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 fn parse<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, ProtocolError> {

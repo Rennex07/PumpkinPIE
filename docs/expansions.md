@@ -300,6 +300,9 @@ values barely move. `Cache::Never`, the default, asks you every time.
 The provider caps a TTL at 60 seconds, so a plugin cannot serve stale data indefinitely. Read
 `Registered::cache` to see what it actually applied.
 
+Cache entries distinguish the viewer, id, and exact optional argument. Expired entries are removed
+on access or insertion; capacity limits can evict entries before their TTL expires.
+
 `register_expansion` returns a `Registered` with two fields — `placeholders`, the names the provider
 now advertises for your namespace, lowercased, and `cache`, the setting it actually applied after
 clamping. There is no `namespace` field; the namespace is what you passed in.
@@ -319,7 +322,7 @@ registration, so `register_expansion("Ranks", &["Prefix"])` works.
 | Limit | Value | Exceeding it |
 | :-- | :-- | :-- |
 | Message size, either direction | 1 MiB | the message is refused (`too large`) |
-| One line of text | 32 KiB | refused in a single request; **silently dropped** in a batch |
+| One line of text | 32 KiB | the whole request is refused, including a batch |
 | Lines per `set_placeholders_batch` | 8192 | the whole batch is refused |
 | Expansion callbacks per line | 16 | the rest are left in the text, with a warning in the log |
 | Cache TTL an expansion may ask for | 60 s | clamped to 60 s |

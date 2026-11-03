@@ -112,10 +112,23 @@ pub struct Substituted {
 /// to the resolver once, so a line that repeats it still costs one lookup.
 pub fn substitute(
     text: &str,
-    mut resolve: impl FnMut(&str, Option<&str>) -> Option<String>,
+    resolve: impl FnMut(&str, Option<&str>) -> Option<String>,
 ) -> Substituted {
+    try_substitute(text, usize::MAX, resolve).expect("unlimited substitution")
+}
+
+/// The substituted text exceeds its byte limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OutputTooLarge;
+
+/// Substitutes without allowing the resulting text to exceed `max_bytes`.
+pub fn try_substitute(
+    text: &str,
+    max_bytes: usize,
+    mut resolve: impl FnMut(&str, Option<&str>) -> Option<String>,
+) -> Result<Substituted, OutputTooLarge> {
     let bytes = text.as_bytes();
-    let mut out = String::with_capacity(text.len());
+    let mut out = String::with_capacity(text.len().min(max_bytes));
     let mut unresolved: Vec<String> = Vec::new();
     // A placeholder, and what it resolved to, so a repeat costs one lookup.
     type Lookup = (String, Option<String>);
@@ -129,11 +142,11 @@ pub fn substitute(
             while index < bytes.len() && bytes[index] != MARKER {
                 index += 1;
             }
-            out.push_str(&text[start..index]);
+            append(&mut out, &text[start..index], max_bytes)?;
             continue;
         }
         let Some((token, next)) = scan(bytes, index) else {
-            out.push('%');
+            append(&mut out, "%", max_bytes)?;
             index += 1;
             continue;
         };
@@ -150,9 +163,9 @@ pub fn substitute(
         };
 
         match value {
-            Some(value) => out.push_str(&value),
+            Some(value) => append(&mut out, &value, max_bytes)?,
             None => {
-                out.push_str(&token.source());
+                append(&mut out, &token.source(), max_bytes)?;
                 if !unresolved.contains(&token.id) {
                     unresolved.push(token.id);
                 }
@@ -160,8 +173,16 @@ pub fn substitute(
         }
     }
 
-    Substituted {
+    Ok(Substituted {
         text: out,
         unresolved,
+    })
+}
+
+fn append(out: &mut String, value: &str, max_bytes: usize) -> Result<(), OutputTooLarge> {
+    if value.len() > max_bytes.saturating_sub(out.len()) {
+        return Err(OutputTooLarge);
     }
+    out.push_str(value);
+    Ok(())
 }

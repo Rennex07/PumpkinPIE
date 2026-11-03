@@ -22,8 +22,8 @@ use std::time::{Duration, Instant};
 use pumpkin_pie::builtins::{self, ResolveContext};
 use pumpkin_pie::expansion::{Expansion, Registry};
 use pumpkin_pie::protocol::{
-    MAX_BATCH_LINES, MAX_ID_LENGTH, MAX_TEXT_LENGTH, ProtocolError, RegisteredPlaceholder, Request,
-    ResolvedLine, Response, Success, decode_request, encode,
+    MAX_BATCH_LINES, MAX_ID_LENGTH, MAX_MESSAGE_BYTES, MAX_TEXT_LENGTH, ProtocolError,
+    RegisteredPlaceholder, Request, ResolvedLine, Response, Success, decode_request, encode,
 };
 use pumpkin_pie::{IpcMessage, PluginId};
 use pumpkin_plugin_api::{
@@ -40,22 +40,93 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const MAX_CALLBACKS_PER_LINE: usize = 16;
 
 /// What one expansion's value is cached against.
-type CacheKey = (String, String);
+type CacheKey = (String, String, String, Option<String>);
 
 /// One expansion's cached values, keyed by viewer and placeholder.
 type ExpansionCache = HashMap<CacheKey, Cached>;
+
+const MAX_CACHE_ENTRIES: usize = 4096;
+const MAX_CACHE_BYTES: usize = 4 * MAX_MESSAGE_BYTES;
 
 /// A cached expansion value, and when it was stored.
 struct Cached {
     value: Option<String>,
     stored: Instant,
+    ttl: Duration,
+}
+
+fn entry_size(key: &CacheKey, value: &Option<String>) -> usize {
+    key.0.len()
+        + key.1.len()
+        + key.2.len()
+        + key.3.as_ref().map_or(0, String::len)
+        + value.as_ref().map_or(0, String::len)
+}
+
+fn cache_key(source: &str, viewer: &str, id: &str, argument: Option<&str>) -> CacheKey {
+    (
+        source.to_string(),
+        viewer.to_string(),
+        id.to_ascii_lowercase(),
+        argument.map(str::to_string),
+    )
+}
+
+fn cache_get(cache: &mut ExpansionCache, key: &CacheKey, now: Instant) -> Option<Option<String>> {
+    let entry = cache.get(key)?;
+    if now.saturating_duration_since(entry.stored) >= entry.ttl {
+        cache.remove(key);
+        return None;
+    }
+    Some(entry.value.clone())
+}
+
+fn cache_insert(
+    cache: &mut ExpansionCache,
+    key: CacheKey,
+    value: Option<String>,
+    ttl: Duration,
+    now: Instant,
+    max_entries: usize,
+    max_bytes: usize,
+) {
+    cache.retain(|_, item| now.saturating_duration_since(item.stored) < item.ttl);
+    cache.remove(&key);
+    let size = entry_size(&key, &value);
+    if max_entries == 0 || size > max_bytes {
+        return;
+    }
+    let mut used: usize = cache
+        .iter()
+        .map(|(key, item)| entry_size(key, &item.value))
+        .sum();
+    while cache.len() >= max_entries || size > max_bytes.saturating_sub(used) {
+        let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, item)| item.stored)
+            .map(|(key, _)| key.clone())
+        else {
+            break;
+        };
+        if let Some(item) = cache.remove(&oldest) {
+            used -= entry_size(&oldest, &item.value);
+        }
+    }
+    cache.insert(
+        key,
+        Cached {
+            value,
+            stored: now,
+            ttl,
+        },
+    );
 }
 
 /// Everything the provider owns.
 struct State {
     registry: Mutex<Registry>,
     /// Keyed by expansion source, then by viewer and placeholder.
-    cache: Mutex<HashMap<String, ExpansionCache>>,
+    cache: Mutex<ExpansionCache>,
     server: OnceLock<Server>,
 }
 
@@ -93,18 +164,29 @@ pub fn server() -> &'static Server {
 
 /// Resolves one line, returning the text and what stayed unresolved.
 pub fn resolve_line(viewer_name: Option<&str>, text: &str) -> ResolvedLine {
+    try_resolve_line(viewer_name, text).unwrap_or_else(|_| ResolvedLine {
+        text: text.to_string(),
+        unresolved: Vec::new(),
+    })
+}
+
+pub(crate) fn try_resolve_line(
+    viewer_name: Option<&str>,
+    text: &str,
+) -> Result<ResolvedLine, ProtocolError> {
     let server = server();
     let viewer = viewer_name.and_then(|name| server.get_player_by_name(name));
     let viewer_key = viewer_name.unwrap_or_default().to_string();
     let budget = Cell::new(MAX_CALLBACKS_PER_LINE);
 
-    let result = pumpkin_pie::tokens::substitute(text, |id, argument| {
+    let result = pumpkin_pie::tokens::try_substitute(text, MAX_MESSAGE_BYTES, |id, argument| {
         resolve_one(viewer.as_ref(), &viewer_key, id, argument, &budget)
-    });
-    ResolvedLine {
+    })
+    .map_err(|_| ProtocolError::TooLarge)?;
+    Ok(ResolvedLine {
         text: result.text,
         unresolved: result.unresolved,
-    }
+    })
 }
 
 /// Resolves a single placeholder, or `None` to leave it alone.
@@ -127,7 +209,7 @@ fn resolve_one(
     }
 
     let expansion = lock(&state().registry).owner_of(id)?.clone();
-    let key: CacheKey = (viewer_key.to_string(), id.to_ascii_lowercase());
+    let key = cache_key(&expansion.source, viewer_key, id, argument);
     if let Some(cached) = cached(&expansion, &key) {
         return cached;
     }
@@ -138,21 +220,35 @@ fn resolve_one(
     }
     budget.set(budget.get() - 1);
 
-    let (namespace, name) = id.split_once('_')?;
-    let request = Request::OnRequest {
-        namespace: namespace.to_string(),
+    let request = callback_request(
+        &expansion,
+        id,
+        viewer.map(|player| player.get_name()),
+        argument,
+    )?;
+    let value = ask_expansion(&expansion.source, &request);
+    store(&expansion, key, value.clone());
+    value
+}
+
+fn callback_request(
+    expansion: &Expansion,
+    id: &str,
+    viewer: Option<String>,
+    argument: Option<&str>,
+) -> Option<Request> {
+    let (_, name) = id.split_once('_')?;
+    Some(Request::OnRequest {
+        namespace: expansion.namespace.clone(),
         id: id.to_string(),
         // Lowercased to match how `Registry::add` stores names. Sending it as
         // written meant `%myexp_COUNT%` reached the expansion as `COUNT`, which
         // no `match` arm for the registered `count` would ever hit, so the
         // placeholder silently stayed in the text.
         name: name.to_ascii_lowercase(),
-        viewer: viewer.map(|player| player.get_name()),
+        viewer,
         argument: argument.map(str::to_string),
-    };
-    let value = ask_expansion(&expansion.source, &request);
-    store(&expansion, key, value.clone());
-    value
+    })
 }
 
 /// Reads a cached value if it is still inside its expansion's TTL.
@@ -160,12 +256,7 @@ fn cached(expansion: &Expansion, key: &CacheKey) -> Option<Option<String>> {
     if expansion.ttl_ms() == 0 {
         return None;
     }
-    let mut all = lock(&state().cache);
-    let entry = all.get_mut(&expansion.source)?.get_mut(key)?;
-    if entry.stored.elapsed() > Duration::from_millis(expansion.ttl_ms()) {
-        return None;
-    }
-    Some(entry.value.clone())
+    cache_get(&mut lock(&state().cache), key, Instant::now())
 }
 
 /// Stores a value if the expansion asked for a TTL.
@@ -173,16 +264,15 @@ fn store(expansion: &Expansion, key: CacheKey, value: Option<String>) {
     if expansion.ttl_ms() == 0 {
         return;
     }
-    lock(&state().cache)
-        .entry(expansion.source.clone())
-        .or_default()
-        .insert(
-            key,
-            Cached {
-                value,
-                stored: Instant::now(),
-            },
-        );
+    cache_insert(
+        &mut lock(&state().cache),
+        key,
+        value,
+        Duration::from_millis(expansion.ttl_ms()),
+        Instant::now(),
+        MAX_CACHE_ENTRIES,
+        MAX_CACHE_BYTES,
+    );
 }
 
 /// Every placeholder the provider knows, built in and contributed.
@@ -274,25 +364,27 @@ fn handle(sender: &str, request: Request) -> Response {
             for namespace in &namespaces {
                 info!("{sender} released {namespace}");
             }
-            lock(&state().cache).remove(sender);
+            forget(sender);
             Response::success(Success::Unregistered { namespaces })
         }
         Request::SetPlaceholders { text, viewer, .. } => {
             if let Err(error) = check_text(&text) {
                 return Response::from_error(error);
             }
-            Response::success(Success::Resolved(resolve_line(viewer.as_deref(), &text)))
+            match try_resolve_line(viewer.as_deref(), &text) {
+                Ok(line) => Response::success(Success::Resolved(line)),
+                Err(error) => Response::from_error(error),
+            }
         }
         Request::SetPlaceholdersBatch { requests } => {
             if requests.len() > MAX_BATCH_LINES {
                 return Response::failure(format!("at most {MAX_BATCH_LINES} lines per batch"));
             }
-            let results = requests
-                .iter()
-                .filter(|line| check_text(&line.text).is_ok())
-                .map(|line| resolve_line(line.viewer.as_deref(), &line.text))
-                .collect();
-            Response::success(Success::ResolvedBatch { results })
+            resolve_batch(
+                &requests,
+                |line| try_resolve_line(line.viewer.as_deref(), &line.text),
+                MAX_MESSAGE_BYTES,
+            )
         }
         Request::GetPlaceholderValue {
             id,
@@ -346,9 +438,48 @@ fn check_text(text: &str) -> Result<(), ProtocolError> {
     Ok(())
 }
 
+fn resolve_batch(
+    requests: &[pumpkin_pie::protocol::Line],
+    mut resolve: impl FnMut(&pumpkin_pie::protocol::Line) -> Result<ResolvedLine, ProtocolError>,
+    limit: usize,
+) -> Response {
+    for line in requests {
+        if let Err(error) = check_text(&line.text) {
+            return Response::from_error(error);
+        }
+    }
+    // Reserve space for the response wrapper and separators. Each line is
+    // serialized separately to account for JSON escaping as well as text.
+    let mut remaining = limit.saturating_sub(64);
+    let mut results = Vec::new();
+    for line in requests {
+        let result = match resolve(line) {
+            Ok(result) => result,
+            Err(error) => return Response::from_error(error),
+        };
+        let size = match encode(&result) {
+            Ok(bytes) => bytes.len().saturating_add(1),
+            Err(error) => return Response::from_error(error),
+        };
+        if size > remaining {
+            return Response::from_error(ProtocolError::TooLarge);
+        }
+        remaining -= size;
+        results.push(result);
+    }
+    Response::success(Success::ResolvedBatch { results })
+}
+
+fn encode_response(response: &Response) -> Vec<u8> {
+    encode(response).unwrap_or_else(|_| {
+        // This fixed error is always below the protocol limit.
+        br#"{"ok":false,"error":"response is too large"}"#.to_vec()
+    })
+}
+
 /// Drops anything cached for `sender`, which a re-register invalidates.
 fn forget(sender: &str) {
-    lock(&state().cache).remove(sender);
+    lock(&state().cache).retain(|key, _| key.0 != sender);
 }
 
 /// Asks the plugin that owns an expansion for one of its placeholders.
@@ -427,8 +558,239 @@ impl Plugin for PumpkinPie {
             }
         };
         let response = handle(&sender, request);
-        Ok(encode(&response).unwrap_or_default())
+        Ok(encode_response(&response))
     }
 }
 
 register_plugin!(PumpkinPie);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_pie::protocol::{Cache, Line, decode_response};
+
+    #[test]
+    fn cache_distinguishes_arguments_and_negative_values() {
+        let mut cache = ExpansionCache::new();
+        let now = Instant::now();
+        let ttl = Duration::from_secs(10);
+        for (arg, value) in [
+            (None, Some("none")),
+            (Some(""), None),
+            (Some("gold"), Some("10")),
+            (Some("silver"), Some("50")),
+        ] {
+            cache_insert(
+                &mut cache,
+                cache_key("exp", "Steve", "RANKS_value", arg),
+                value.map(str::to_string),
+                ttl,
+                now,
+                10,
+                1000,
+            );
+        }
+        for (arg, value) in [
+            (None, Some("none")),
+            (Some(""), None),
+            (Some("gold"), Some("10")),
+            (Some("silver"), Some("50")),
+        ] {
+            assert_eq!(
+                cache_get(
+                    &mut cache,
+                    &cache_key("exp", "Steve", "ranks_value", arg),
+                    now
+                ),
+                Some(value.map(str::to_string))
+            );
+        }
+    }
+
+    #[test]
+    fn cache_evicts_expired_and_oldest_entries_and_limits_bytes() {
+        let mut cache = ExpansionCache::new();
+        let now = Instant::now();
+        let ttl = Duration::from_secs(2);
+        let a = cache_key("s", "", "a", None);
+        let b = cache_key("s", "", "b", None);
+        let c = cache_key("s", "", "c", None);
+        cache_insert(&mut cache, a.clone(), Some("x".into()), ttl, now, 2, 100);
+        cache_insert(
+            &mut cache,
+            b.clone(),
+            None,
+            ttl,
+            now + Duration::from_millis(1),
+            2,
+            100,
+        );
+        cache_insert(
+            &mut cache,
+            c.clone(),
+            None,
+            ttl,
+            now + Duration::from_millis(2),
+            2,
+            100,
+        );
+        assert!(!cache.contains_key(&a));
+        assert!(cache.contains_key(&b));
+        cache_insert(
+            &mut cache,
+            a.clone(),
+            None,
+            ttl,
+            now + ttl + Duration::from_millis(2),
+            2,
+            100,
+        );
+        assert!(!cache.contains_key(&c));
+        assert_eq!(
+            cache_get(&mut cache, &b, now + ttl + Duration::from_millis(1)),
+            None
+        );
+        cache_insert(
+            &mut cache,
+            b.clone(),
+            Some("too large".into()),
+            ttl,
+            now + ttl,
+            2,
+            3,
+        );
+        assert!(!cache.contains_key(&b));
+    }
+
+    #[test]
+    fn cache_evicts_old_entries_to_fit_byte_budget() {
+        let mut cache = ExpansionCache::new();
+        let now = Instant::now();
+        let ttl = Duration::from_secs(5);
+        let a = cache_key("s", "", "a", None);
+        let b = cache_key("s", "", "b", None);
+        cache_insert(&mut cache, a.clone(), Some("123".into()), ttl, now, 10, 7);
+        cache_insert(
+            &mut cache,
+            b.clone(),
+            Some("456".into()),
+            ttl,
+            now + Duration::from_millis(1),
+            10,
+            7,
+        );
+        assert!(!cache.contains_key(&a));
+        assert!(cache.contains_key(&b));
+    }
+
+    #[test]
+    fn cache_removes_an_expired_entry_on_lookup() {
+        let mut cache = ExpansionCache::new();
+        let now = Instant::now();
+        let ttl = Duration::from_secs(1);
+        let key = cache_key("s", "viewer", "s_value", None);
+        cache_insert(&mut cache, key.clone(), None, ttl, now, 2, 100);
+        assert_eq!(cache_get(&mut cache, &key, now), Some(None));
+        assert_eq!(cache_get(&mut cache, &key, now + ttl), None);
+        assert!(!cache.contains_key(&key));
+    }
+
+    #[test]
+    fn callback_uses_registered_normalized_namespace() {
+        let mut registry = Registry::new();
+        let expansion = registry.add("Ranks", "source", [], Cache::Never).unwrap();
+        let request = callback_request(expansion, "RANKS_Prefix", None, None).unwrap();
+        assert!(
+            matches!(request, Request::OnRequest { namespace, name, id, .. } if namespace == "ranks" && name == "prefix" && id == "RANKS_Prefix")
+        );
+    }
+
+    #[test]
+    fn batch_rejects_oversized_middle_line_before_resolving() {
+        let lines = vec![
+            Line {
+                viewer: Some("a".into()),
+                text: "first".into(),
+            },
+            Line {
+                viewer: Some("b".into()),
+                text: "x".repeat(MAX_TEXT_LENGTH + 1),
+            },
+            Line {
+                viewer: Some("c".into()),
+                text: "last".into(),
+            },
+        ];
+        let mut calls = 0;
+        let response = resolve_batch(
+            &lines,
+            |_| {
+                calls += 1;
+                unreachable!()
+            },
+            MAX_MESSAGE_BYTES,
+        );
+        assert!(!response.ok);
+        assert_eq!(calls, 0);
+        assert!(!decode_response(&encode_response(&response)).unwrap().ok);
+    }
+
+    #[test]
+    fn valid_batch_preserves_viewer_order_and_cardinality() {
+        let lines: Vec<Line> = ["a", "b", "c"]
+            .into_iter()
+            .map(|name| Line {
+                viewer: Some(name.into()),
+                text: "x".into(),
+            })
+            .collect();
+        let response = resolve_batch(
+            &lines,
+            |line| {
+                Ok(ResolvedLine {
+                    text: line.viewer.clone().unwrap(),
+                    unresolved: vec![],
+                })
+            },
+            MAX_MESSAGE_BYTES,
+        );
+        let Success::ResolvedBatch { results } = response.into_success().unwrap() else {
+            panic!("expected batch");
+        };
+        assert_eq!(
+            results
+                .iter()
+                .map(|line| line.text.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn batch_limits_aggregate_encoded_size_and_returns_valid_failure() {
+        let lines = vec![
+            Line {
+                viewer: None,
+                text: "x".into()
+            };
+            3
+        ];
+        let response = resolve_batch(
+            &lines,
+            |_| {
+                Ok(ResolvedLine {
+                    text: "\"".repeat(20),
+                    unresolved: vec![],
+                })
+            },
+            150,
+        );
+        assert!(!response.ok);
+        assert!(!decode_response(&encode_response(&response)).unwrap().ok);
+        let oversized = Response::success(Success::Value {
+            known: true,
+            value: Some("x".repeat(MAX_MESSAGE_BYTES)),
+        });
+        assert!(!decode_response(&encode_response(&oversized)).unwrap().ok);
+    }
+}

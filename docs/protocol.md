@@ -21,15 +21,20 @@ The current protocol version is `0`. Call `ping` and check it before relying on 
 | Limit | Value | Exceeding it |
 | :-- | :-- | :-- |
 | Message size, either direction | 1 MiB | the message is refused |
-| One line of text | 32 KiB | in a single request, refused; in a batch, **silently dropped** |
+| One line of text | 32 KiB | the whole request is refused, including a batch |
 | Lines per `set_placeholders_batch` | 8192 | the whole batch is refused |
 | An id passed to `get_placeholder_value` | 128 characters | that request is refused |
 | Expansion callbacks per line | 16 | the rest are left in the text, with a warning in the log |
 | Cache TTL an expansion may ask for | 60 s | clamped to 60 s |
+| Cached expansion values | 4096 entries and 4 MiB of key/value bytes total | expired or oldest entries are evicted |
 
 The callback budget is per **line**, not per message, so a large batch is not penalised for being
 large. It counts each *distinct* placeholder once, so a line that repeats a value still costs one
 round trip.
+
+Substituted text is limited to 1 MiB, and batch results share a 1 MiB encoded response budget
+(including a small wrapper allowance). JSON escaping counts toward the response limit. An oversized
+response is refused with a normal error response rather than a partial batch.
 
 Note what is **not** enforced server-side: the provider checks the length of an id and of a line's
 text, and nothing else. Namespace, name, viewer and argument lengths are not validated. The Rust
@@ -63,7 +68,7 @@ wrapped:
 
 ```json
 -> {"op":"ping"}
-<- {"ok":true,"ping":{"protocol":0,"name":"PumpkinPIE","version":"0.2.2",
+<- {"ok":true,"ping":{"protocol":0,"name":"PumpkinPIE","version":"0.2.5",
     "placeholders":11,"expansions":2}}
 ```
 
@@ -111,10 +116,9 @@ wants, because it is one message instead of one per player.
     ]}}
 ```
 
-Results come back in request order — **but the array can be shorter than the request array.** A line
-over the 32 KiB text limit is dropped silently, with no error and no warning, so ten requests can
-come back as nine results. Do not index `results[i]` against `requests[i]`; check the lengths match
-first, or send lines you know are short.
+Results come back in request order, one per input. A batch with an oversized line or response is
+refused whole. Clients should still verify the result count when talking to older providers, which
+silently dropped oversized lines.
 
 ### `get_placeholder_value`
 

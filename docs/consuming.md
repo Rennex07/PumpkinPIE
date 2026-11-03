@@ -38,9 +38,9 @@ pumpkin-pie = { git = "https://github.com/Rennex07/PumpkinPIE" }
 # so a plugin cannot use them without declaring it. Match your Pumpkin release.
 #
 # This resolves from crates.io, so there is no Pumpkin checkout to clone and no
-# `[patch.crates-io]` to write. The published `0.2.0+26.3-26.51` crate carries
+# `[patch.crates-io]` to write. The published `0.2.1+26.3-26.51` crate carries
 # the same plugin WIT as the matching Pumpkin release.
-pumpkin-plugin-api = "=0.2.0+26.3-26.51"
+pumpkin-plugin-api = "=0.2.1+26.3-26.51"
 tracing = "0.1"
 ```
 
@@ -54,11 +54,12 @@ cargo build --release --target wasm32-wasip2
 
 Two things about that.
 
-**Pin the version exactly.** `pumpkin-plugin-api = "=0.2.0+26.3-26.51"` is not a preference: a
+**Pin the version exactly.** `pumpkin-plugin-api = "=0.2.1+26.3-26.51"` is not a preference: a
 caret requirement would let a later `0.2.x` satisfy the dependency, and Pumpkin has kept one version
 string across a WIT change before. A component built against the wrong WIT still compiles, and the
 server then refuses to load it with a bare `type-checking export func 'handle-event'`. The exact
-requirement is what makes the build reproducible.
+requirement excludes later `0.2.x` releases. Cargo ignores build metadata when matching versions;
+retain the lockfile and verify the WIT against the target server as well.
 
 **Do not also depend on `pumpkin-pie-plugin`.** Every Pumpkin plugin exports a symbol called
 `init-plugin`, so linking both crates fails to compile with `duplicate symbol: init-plugin`. The
@@ -133,9 +134,9 @@ let lines = [("Steve", "%player_ping%ms"), ("Alex", "%player_ping%ms")];
 let results = pie.set_placeholders_batch(&lines)?;
 ```
 
-Results come back in the order you sent them, so `results[i]` is line `i`. The array can also come
-back **shorter** than the requests: a line over the 32 KiB limit is dropped silently. Check the
-lengths match before zipping results back to players.
+Results come back in the order you sent them, so `results[i]` is line `i`. The provider refuses the
+whole batch if a line or the response is too large. Check the lengths before zipping results back to
+players when interoperating with older providers, which could silently drop oversized lines.
 
 Every batch line carries a viewer. The protocol allows a line with no viewer, but there is no Rust
 API for it yet, so a batch is always per player — which means **a server-wide line like

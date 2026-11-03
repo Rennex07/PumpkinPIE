@@ -87,7 +87,15 @@ impl CommandHandler for PieCommand {
         }
 
         let viewer = sender.as_player().map(|player| player.get_name());
-        let line = plugin::resolve_line(viewer.as_deref(), &requested);
+        let line = match plugin::try_resolve_line(viewer.as_deref(), &requested) {
+            Ok(line) => line,
+            Err(error) => {
+                sender.send_error(
+                    TextComponent::text(&error.to_string()).color_named(NamedColor::Red),
+                );
+                return Ok(1);
+            }
+        };
         sender.send_message(TextComponent::text(&line.text));
 
         if !line.unresolved.is_empty() {
