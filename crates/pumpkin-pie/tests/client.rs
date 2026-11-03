@@ -1,4 +1,4 @@
-﻿//! The batch length check, on the host target.
+//! The batch length check, on the host target.
 //!
 //! `check_lines` is pure, so the testable half of the 32 KiB fix is tested here
 //! rather than left to a live provider.
@@ -8,7 +8,10 @@ use pumpkin_pie::client::check_lines_for_testing;
 #[test]
 fn a_line_over_32_kib_is_an_error_not_a_dropped_line() {
     let fine = vec![("Steve", "%perm_prefix% hi")];
-    assert!(check_lines_for_testing(&fine).is_ok(), "a normal line must pass");
+    assert!(
+        check_lines_for_testing(&fine).is_ok(),
+        "a normal line must pass"
+    );
 
     let huge = "x".repeat(32769);
     let over = vec![("Steve", huge.as_str())];

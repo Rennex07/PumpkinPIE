@@ -394,4 +394,3 @@ pub fn answer(
     };
     encode(&reply)
 }
-
