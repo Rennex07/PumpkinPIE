@@ -1,7 +1,7 @@
 name: release
 
 # The provider is built against the `pumpkin-plugin-api` crate from crates.io,
-# which is the same crate the `0.2.0+26.3-26.51` server release carries, so a
+# which matches the targeted `0.2.1+26.3-26.51` server release, so a
 # build needs no sibling checkout of Pumpkin and anyone can build this plugin
 # without one.
 on:
@@ -31,7 +31,7 @@ env:
   # Bump the `pumpkin-plugin-api` requirement in the manifests and WIT_TREE
   # together. `tools/check-wit.ps1` reads the version from the requirement, so
   # there is only one place to bump the version.
-  WIT_TREE: e0bb97ea48d9857c181356ba14964d47b20d0f56
+  WIT_TREE: 5aeec84177a489e920a22532e5aff2b5f9279c1b
 
 jobs:
   build:
@@ -96,9 +96,9 @@ jobs:
             `plugins` directory.
 
             Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}` from
-            crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`. Verified by
-            loading it in the official Windows binary from the matching Pumpkin
-            release.
+            crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`, targeting Pumpkin
+            commit `224f9f8144ca53a8d0800acb87607d714196e2a6`. This build has not
+            been verified on a live server.
 
             **Compatibility is not by version number.** Pumpkin kept the
             `0.2.0+26.3-26.51` version string while changing its plugin WIT, so
@@ -131,7 +131,6 @@ jobs:
             Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}` from
             crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`.
 
-            Fixes `set_placeholders_batch` sending a line over 32 KiB, which the
-            provider dropped and returned a shorter results array for, so every
-            line after it read its neighbour's answer. The batch is refused whole
-            instead.
+            Fixes cache keys, eviction, callback namespace normalization and
+            response limits. Oversized batch lines now refuse the whole request
+            instead of shifting results.
