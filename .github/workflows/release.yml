@@ -128,9 +128,7 @@ jobs:
           api-token: ${{ secrets.MARKET_API_TOKEN }}
           track: stable
           release-notes: |
-            Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}` from
-            crates.io, plugin WIT `${{ steps.wit.outputs.wit }}`.
+            Bug fixes and stability improvements.
 
-            Fixes cache keys, eviction, callback namespace normalization and
-            response limits. Oversized batch lines now refuse the whole request
-            instead of shifting results.
+            Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}`, plugin
+            WIT `${{ steps.wit.outputs.wit }}`.
