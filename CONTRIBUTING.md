@@ -4,8 +4,8 @@
 
 ```bash
 cargo test
-cargo clippy --target wasm32-wasip2 --all-targets
-cargo build --release --target wasm32-wasip2
+cargo clippy --all-targets -- -D warnings
+cargo build --locked --offline --release --target wasm32-wasip3
 ```
 
 The tests cover the parts that are easy to break quietly: the token scanner, the JSON boundary, and
@@ -50,7 +50,7 @@ direction a real scoreboard or tab list plugin uses.
 ### Documentation
 
 The prose lives in `README.md` and `docs/`. The code examples there are **verified by hand** — copied
-into a scratch crate and built against `wasm32-wasip2` — not by a test.
+into a scratch crate and built against `wasm32-wasip2` before the WASIp3 migration — not by a test.
 
 There was a `tests/docs_example.rs` that claimed to do this automatically. It could not: a test is
 an `rlib`, the example is a `cdylib` exporting `init-plugin`, and a test cannot export that symbol

@@ -124,7 +124,7 @@ register_plugin!(Ranks);
 The two `#[cfg(target_arch = "wasm32")]` gates are what let a `cdylib` crate also carry a
 `#[cfg(test)]` module. `register_plugin!` defines the `init-plugin` export, which a host build has
 no use for and which conflicts when the crate is linked into a test binary. Keep the gate and both
-`cargo build --target wasm32-wasip2` and `cargo test` work. Drop it and the wasm build still
+`cargo build --target wasm32-wasip3` and `cargo test` work. Drop it and the wasm build still
 succeeds — but `cargo test` stops linking.
 
 `crates/pumpkin-pie-testexp` is a working expansion you can copy from.

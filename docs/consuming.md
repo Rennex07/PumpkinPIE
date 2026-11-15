@@ -47,9 +47,9 @@ tracing = "0.1"
 Then build it, and drop the artifact in your server's `plugins/`:
 
 ```bash
-rustup target add wasm32-wasip2
-cargo build --release --target wasm32-wasip2
-# -> target/wasm32-wasip2/release/<your-crate-name>.wasm
+rustup target add wasm32-wasip3
+cargo build --release --target wasm32-wasip3
+# -> target/wasm32-wasip3/release/<your-crate-name>.wasm
 ```
 
 Two things about that.

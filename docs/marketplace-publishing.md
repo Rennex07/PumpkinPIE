@@ -18,7 +18,7 @@ no CLI, so the request has to be hand-built — and Windows PowerShell 5.1 has n
   with:
     plugin-id: TV3Ord4H
     version: ${{ steps.version.outputs.value }}
-    wasm-file: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
+    wasm-file: target/wasm32-wasip3/release/pumpkin_pie_plugin.wasm
     api-token: ${{ secrets.MARKET_API_TOKEN }}
     track: stable
     release-notes: |

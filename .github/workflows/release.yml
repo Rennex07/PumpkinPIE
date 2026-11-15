@@ -16,6 +16,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: pie-release
+  cancel-in-progress: false
+
 env:
   # The plugin WIT that the component is built against.
   #
@@ -46,26 +50,26 @@ jobs:
         shell: pwsh
         run: tools/check-wit.ps1
 
-      - name: Install the wasm32-wasip2 target
-        run: rustup target add wasm32-wasip2
+      - name: Install Rust and the wasm32-wasip3 target
+        run: rustup show
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: PumpkinPIE -> target
 
       - name: Test
-        run: cargo test
+        run: cargo test --locked
 
       - name: Build the provider and the test expansion
-        run: cargo build --release --target wasm32-wasip2
+        run: cargo build --locked --offline --release --target wasm32-wasip3
 
       - name: Upload the two test plugins
         uses: actions/upload-artifact@v4
         with:
           name: pumpkin-pie-test-plugins
           path: |
-            target/wasm32-wasip2/release/pumpkin_pie_testexp.wasm
-            target/wasm32-wasip2/release/pumpkin_pie_consumer.wasm
+            target/wasm32-wasip3/release/pumpkin_pie_testexp.wasm
+            target/wasm32-wasip3/release/pumpkin_pie_consumer.wasm
 
       # The Market wants the version without a leading `v`, and the tag and the
       # release both carry one, so it is stripped once here rather than in every
@@ -81,6 +85,8 @@ jobs:
           $version = "${{ inputs.tag }}"
           if (-not $version) { $version = $env:GITHUB_REF_NAME }
           $version = $version -replace '^v', ''
+          $package = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq 'pumpkin-pie-plugin'
+          if ($version -ne $package.version) { throw "Release tag must match the plugin package version" }
           "value=$version" >> $env:GITHUB_OUTPUT
 
       # The component is attached bare rather than zipped. It is the only file
@@ -90,8 +96,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
+          files: target/wasm32-wasip3/release/pumpkin_pie_plugin.wasm
           body: |
+            Rebuilt for wasm32-wasip3.
+
             Download `pumpkin_pie_plugin.wasm` and drop it into your server's
             `plugins` directory.
 
@@ -124,11 +132,8 @@ jobs:
         with:
           plugin-id: TV3Ord4H
           version: ${{ steps.version.outputs.value }}
-          wasm-file: target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm
+          wasm-file: target/wasm32-wasip3/release/pumpkin_pie_plugin.wasm
           api-token: ${{ secrets.MARKET_API_TOKEN }}
           track: stable
           release-notes: |
-            Bug fixes and stability improvements.
-
-            Built against `pumpkin-plugin-api` `${{ steps.wit.outputs.api }}`, plugin
-            WIT `${{ steps.wit.outputs.wit }}`.
+            Rebuilt for wasm32-wasip3.

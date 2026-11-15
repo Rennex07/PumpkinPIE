@@ -63,9 +63,9 @@ tracing = "0.1"
 Build it with the wasm target, and the `.wasm` lands in your server's `plugins/`:
 
 ```bash
-rustup target add wasm32-wasip2
-cargo build --release --target wasm32-wasip2
-# -> target/wasm32-wasip2/release/<your-crate-name>.wasm, into plugins/
+rustup target add wasm32-wasip3
+cargo build --release --target wasm32-wasip3
+# -> target/wasm32-wasip3/release/<your-crate-name>.wasm, into plugins/
 ```
 
 An unsigned `.wasm` logs a warning about untrusted sources. That is advisory — the plugin loads.
@@ -126,16 +126,17 @@ Clone this repository on its own. There is no Pumpkin checkout to clone next to 
 git clone https://github.com/Rennex07/PumpkinPIE.git
 ```
 
-Then:
+Use the pinned Rust 1.100.0 toolchain. The component requires a Pumpkin runtime
+with WASIp3 support as well as the matching plugin WIT.
 
 ```bash
-rustup target add wasm32-wasip2
-cargo build --release --target wasm32-wasip2
+rustup target add wasm32-wasip3
+cargo fetch --locked
+cargo build --locked --offline --release --target wasm32-wasip3
 ```
 
-Copy `target/wasm32-wasip2/release/pumpkin_pie_plugin.wasm` into your Pumpkin server's `plugins/`
-folder. (`cargo component build` also works, but plain `cargo build` is enough: the crate is
-already a `cdylib` targeting `wasm32-wasip2`.)
+Copy `target/wasm32-wasip3/release/pumpkin_pie_plugin.wasm` into your Pumpkin server's `plugins/`
+folder.
 
 Then, in game, as an operator of level 2 or above:
 
